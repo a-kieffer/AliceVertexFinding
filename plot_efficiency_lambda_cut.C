@@ -34,9 +34,22 @@ using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
 // plot this efficiency with respect to the delta tan lambda cut parameter
 
 
-void plot_efficiency_lambda_cut(){
+void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
 
-    TFile *f = new TFile("lambda_cut_variation_phi_0_005.root");
+    std::string Phi = std::to_string(PhiAngle);
+    std::size_t pos = Phi.find(".");
+    if (pos == std::string::npos){
+
+    }else{
+        Phi.replace(pos, 1, "_");
+    }
+    std::string StdOutfile = "lambda_cut_variation";
+    std::string outfile = StdOutfile + "_phi_" + Phi +".root";
+    std::cout<<outfile<<std::endl;
+
+    outfile = "lambda_cut_variation_phi_0_05.root";
+
+    TFile *f = new TFile(outfile.data());
 
     TNtuple * data ;
     f->GetObject("Results", data);
@@ -47,10 +60,11 @@ void plot_efficiency_lambda_cut(){
     TLeaf *leafReco = data->GetLeaf("RecoMCvalid");
     TLeaf *leafTot = data->GetLeaf("TotTracklets");
     TLeaf* leafCut = data->GetLeaf("Cut");
-
+    
     double ArrEffReco [nEntries];
     double ArrEffFake [nEntries];
     double ArrInvCut [nEntries];
+    
 
 	for (int i{0}; i < nEntries; ++i){
 
@@ -66,56 +80,80 @@ void plot_efficiency_lambda_cut(){
         ArrEffReco[i]=EffReco;
         ArrEffFake[i]= EffFake;
         ArrInvCut[i]=1/lambdaCut;
-
+        
         //std::cout<<FakeTracklets<<"\n";
         //std::cout<<EffReco<<"\n"
-        
-
 	}
+
+  //sorting the vectors to plot a curve later
+    std::vector<std::size_t> index_vec;
+
+    for (std::size_t i = 0; i < nEntries; ++i) { index_vec.push_back(i); }
+
+    std::sort( index_vec.begin(), index_vec.end(), [&](std::size_t a, std::size_t b) { return ArrInvCut[a] < ArrInvCut[b]; });
+
+    double SortedArrEffReco [nEntries];
+    double SortedArrEffFake [nEntries];
+    double SortedArrInvCut [nEntries];
+
+    for (std::size_t i = 0; i <nEntries; ++i)
+    {
+        SortedArrEffReco[i]=ArrEffReco[index_vec[i]];
+        SortedArrEffFake[i]=ArrEffFake[index_vec[i]];
+        SortedArrInvCut[i]=ArrInvCut[index_vec[i]];
+    }
+
+    
 
     int NumDistinctCuts=0;
     double CurrentMeanEffReco=0;
     double CurrentMeanEffFake=0;
     double CurrentInvCut;
-    int CountCurrentInvCut=0;
+
+    std::vector <int> CountCurrentInvCut;
     std::vector<double> DistinctCuts;
     std::vector<double> MeanEffRecoCut;
     std::vector<double> MeanEffFakeCut;
     double meanEffReco;
     double meanEffFake;
-
+ 
     for(int i=0; i<nEntries; i++){
-        if( std::find(DistinctCuts.begin(), DistinctCuts.end(), ArrInvCut[i])==DistinctCuts.end() || i==0){ //we have not processed this value
-            CurrentInvCut=ArrInvCut[i];
+        if( std::find(DistinctCuts.begin(), DistinctCuts.end(), SortedArrInvCut[i])==DistinctCuts.end() || i==0){ //we have not processed this value
+            //std:cout<<NumDistinctCuts<<std::endl;
+        
+            //CountCurrentInvCut[NumDistinctCuts]=0; //this line has a problem
+            CountCurrentInvCut.push_back(0);
+            
+            CurrentInvCut=SortedArrInvCut[i];
             DistinctCuts.push_back(CurrentInvCut);
             CurrentMeanEffReco=0;
             CurrentMeanEffFake=0;
-            CountCurrentInvCut=0;
-            NumDistinctCuts++;
             for(int j=i; j<nEntries; j++){
-                if(ArrInvCut[j]==CurrentInvCut){
-                    CurrentMeanEffReco+=ArrEffReco[j];
-                    CurrentMeanEffFake+= ArrEffFake[j];
-                    CountCurrentInvCut++;
+                if(SortedArrInvCut[j]==CurrentInvCut){
+                    //ok works
+                    CurrentMeanEffReco+=SortedArrEffReco[j];
+                    CurrentMeanEffFake+= SortedArrEffFake[j];
+                    CountCurrentInvCut[NumDistinctCuts]++; 
                 }
             }
-            meanEffReco = CurrentMeanEffReco/CountCurrentInvCut;
-            meanEffFake = CurrentMeanEffFake/CountCurrentInvCut;
-            std::cout<<"Cut :"<<1/CurrentInvCut<<"  mean reco : "<<meanEffReco<<"  mean fake : "<<meanEffFake<<std::endl;
+            
+            meanEffReco = CurrentMeanEffReco/CountCurrentInvCut[NumDistinctCuts];
+            meanEffFake = CurrentMeanEffFake/CountCurrentInvCut[NumDistinctCuts];
+            //std::cout<<"Cut :"<<1/CurrentInvCut<<"  mean reco : "<<meanEffReco<<"  mean fake : "<<meanEffFake<<std::endl;
             MeanEffRecoCut.push_back(meanEffReco);
             MeanEffFakeCut.push_back(meanEffFake);
+            NumDistinctCuts++; 
         }else{
             continue;
         }  
     }
 
-
-
+    
+    for (int c : CountCurrentInvCut){
+        std:cout<<c<<std::endl;
+    }
+    /*
     TCanvas * c1=new TCanvas("c1","Efficiency Reconstruction",1000,700);
-  // TH2F * hpx = new TH2F("hpx","Zoomed Graph Example",10,0,0.05,10,1,1);
-   //hpx->SetStats(kFALSE);   // no statistics
-   //hpx->Draw();
-
 
     c1->SetLogx();
 
@@ -129,13 +167,13 @@ void plot_efficiency_lambda_cut(){
     TGraph * graphMeanReco= new TGraph(NumDistinctCuts,DistinctCuts.data(),MeanEffRecoCut.data());
     graphMeanReco->SetMarkerStyle(20);
     graphMeanReco-> SetMarkerColor(2);
-    graphMeanReco->Draw("P");
+    graphMeanReco->Draw("PC");
 
 
     TCanvas * c2=new TCanvas("c2","Fake tracklets",1000,700);
 
     c2->SetLogx();
-    c2->SetLogy();
+    //c2->SetLogy();
 
     TGraph * graphFake= new TGraph(nEntries, ArrInvCut,ArrEffFake);
     graphFake->SetMarkerStyle(7);
@@ -149,9 +187,7 @@ void plot_efficiency_lambda_cut(){
     graphMeanFake-> SetMarkerColor(4);
     graphMeanFake->Draw("P");
 
-
-
-
+    */
 
     //std::cout<<"to draw : "<<NumDistinctCuts<<" "<<*DistinctCuts.data()<<"   "<<*MeanEffRecoCut.data()<<std::endl;
 }
