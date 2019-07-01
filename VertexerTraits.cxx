@@ -94,10 +94,10 @@ void trackletSelectionKernelSerial(
   const std::vector<int>& foundTracklets12,
   std::vector<Line>& destTracklets,
   std::vector<std::array<float, 7>>& tlv,
-  const char isMc,
+  const bool isMc,
   const std::vector<int>& MClabelsLayer0,
   const std::vector<int>& MClabelsLayer1,
-  const float tanLambdaCut = 0.025f,
+  const float tanLambdaCut ,
   const int maxTracklets = static_cast<int>(2e3))
 {
   int totalTracklets=0;
@@ -111,31 +111,30 @@ void trackletSelectionKernelSerial(
       for (int iTracklet01{ offset01 }; iTracklet01 < offset01 + foundTracklets01[iCurrentLayerClusterIndex]; ++iTracklet01) {
         const float deltaTanLambda{ gpu::GPUCommonMath::Abs(tracklets01[iTracklet01].tanLambda - tracklets12[iTracklet12].tanLambda) };
         if (deltaTanLambda < tanLambdaCut && validTracklets != maxTracklets) {
+          ++validTracklets;
           totalTracklets++;
-          if ( MClabelsLayer0[tracklets01[iTracklet01].firstClusterIndex] == MClabelsLayer1[tracklets01[iTracklet01].secondClusterIndex] 
-          && MClabelsLayer0[tracklets01[iTracklet01].firstClusterIndex] != -1){
-            realTracklets++;
-          }
-            if(isMc){
-            assert(tracklets01[iTracklet01].secondClusterIndex == tracklets12[iTracklet12].firstClusterIndex);
+          if(isMc){ //there are only real tracklets
+           assert(tracklets01[iTracklet01].secondClusterIndex == tracklets12[iTracklet12].firstClusterIndex);
            tlv.push_back(std::array<float, 7>{ deltaTanLambda,
                                                clustersNextLayer[tracklets01[iTracklet01].firstClusterIndex].zCoordinate, clustersNextLayer[tracklets01[iTracklet01].firstClusterIndex].rCoordinate,
                                                clustersCurrentLayer[tracklets01[iTracklet01].secondClusterIndex].zCoordinate, clustersCurrentLayer[tracklets01[iTracklet01].secondClusterIndex].rCoordinate,
                                                debugClustersLayer2[tracklets12[iTracklet12].secondClusterIndex].zCoordinate, debugClustersLayer2[tracklets12[iTracklet12].secondClusterIndex].rCoordinate });
           destTracklets.emplace_back(tracklets01[iTracklet01], clustersNextLayer.data(), clustersCurrentLayer.data());
-            }else{
+          }else{ //there are also false tracklets and we want to keep only the false ones
+            if ( MClabelsLayer0[tracklets01[iTracklet01].firstClusterIndex] == MClabelsLayer1[tracklets01[iTracklet01].secondClusterIndex] 
+          && MClabelsLayer0[tracklets01[iTracklet01].firstClusterIndex] != -1){
+            realTracklets++;
+            }else{ //this is a fake tracklet
               fakeTracklets++;
-              if(!isMc){//then we want to keep only the fake ones
-                  assert(tracklets01[iTracklet01].secondClusterIndex == tracklets12[iTracklet12].firstClusterIndex);
-                  tlv.push_back(std::array<float, 7>{ deltaTanLambda,
+              assert(tracklets01[iTracklet01].secondClusterIndex == tracklets12[iTracklet12].firstClusterIndex);
+              tlv.push_back(std::array<float, 7>{ deltaTanLambda,
                                                clustersNextLayer[tracklets01[iTracklet01].firstClusterIndex].zCoordinate, clustersNextLayer[tracklets01[iTracklet01].firstClusterIndex].rCoordinate,
                                                clustersCurrentLayer[tracklets01[iTracklet01].secondClusterIndex].zCoordinate, clustersCurrentLayer[tracklets01[iTracklet01].secondClusterIndex].rCoordinate,
                                                debugClustersLayer2[tracklets12[iTracklet12].secondClusterIndex].zCoordinate, debugClustersLayer2[tracklets12[iTracklet12].secondClusterIndex].rCoordinate });
-                  destTracklets.emplace_back(tracklets01[iTracklet01], clustersNextLayer.data(), clustersCurrentLayer.data());
-              }
+              destTracklets.emplace_back(tracklets01[iTracklet01], clustersNextLayer.data(), clustersCurrentLayer.data());
+
             }
-          
-          ++validTracklets;
+          }
         }
       }
     }
@@ -407,6 +406,8 @@ void VertexerTraits::computeTrackletsPureMontecarlo()
 
 void VertexerTraits::computeTracklets(const bool useMCLabel)
 {
+
+  std::cout<<"tanLambda Cut :"<<mVrtParams.tanLambdaCut<<"  phi Cut :"<<mVrtParams.phiCut<<std::endl;
   // computeTrackletsPureMontecarlo();
   if (useMCLabel)
     std::cout << "Running in Montecarlo check mode\n";
@@ -415,10 +416,18 @@ void VertexerTraits::computeTracklets(const bool useMCLabel)
   std::vector<int> foundTracklets01;
   std::vector<int> foundTracklets12;
 
+  /* 
+
   ///TODO: Ugly hack!! The labels should be optionals in the trackleter kernel
   std::vector<int> labelsMC0 = useMCLabel ? getMClabelsLayer(0) : std::vector<int>();
   std::vector<int> labelsMC1 = useMCLabel ? getMClabelsLayer(1) : std::vector<int>();
   std::vector<int> labelsMC2 = useMCLabel ? getMClabelsLayer(2) : std::vector<int>();
+
+  */
+
+  std::vector<int> labelsMC0 = getMClabelsLayer(0);
+  std::vector<int> labelsMC1 = getMClabelsLayer(1);
+  std::vector<int> labelsMC2 = getMClabelsLayer(2);
 
   trackleterKernelSerial(
     mClusters[0],
@@ -453,12 +462,28 @@ void VertexerTraits::computeTracklets(const bool useMCLabel)
     foundTracklets01,
     foundTracklets12,
     mTracklets,
+    mDeltaTanlambdas,
     useMCLabel,
     labelsMC0,
     labelsMC1,
-    mDeltaTanlambdas);
+    mVrtParams.tanLambdaCut);
 }
-
+/* 
+const std::vector<Cluster>& clustersNextLayer,    //0
+  const std::vector<Cluster>& clustersCurrentLayer, //1
+  const std::vector<Cluster>& debugClustersLayer2,  //2
+  const std::vector<Tracklet>& tracklets01,
+  const std::vector<Tracklet>& tracklets12,
+  const std::vector<int>& foundTracklets01,
+  const std::vector<int>& foundTracklets12,
+  std::vector<Line>& destTracklets,
+  std::vector<std::array<float, 7>>& tlv,
+  const char isMc,
+  const std::vector<int>& MClabelsLayer0,
+  const std::vector<int>& MClabelsLayer1,
+  const float tanLambdaCut = 0.025f,
+  const int maxTracklets = static_cast<int>(2e3))
+*/
 void VertexerTraits::computeVertices()
 {
   const int numTracklets{ static_cast<int>(mTracklets.size()) };
