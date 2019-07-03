@@ -7,8 +7,6 @@
 #include <TNtuple.h>
 #include <TLeaf.h>
 #include <TGraph.h>
-#include <TH2F.h>
-#include "TH1F.h"
 #include "TCanvas.h"
 #include "TAxis.h"
 #include "TStyle.h"
@@ -35,8 +33,8 @@ using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
 
 void plot_quantiles(int nEntries, double * ArrInvCut, double *ArrEff,int * ArrNum, std::vector <int> CountCurrentInvCut,std::vector<double> DistinctCuts);
 void plot_efficiency_lambda_cut(float PhiAngle);
-void connect_points(double *ArrEff, int * ArrNum, int Num, int NbCuts, std::vector <int>  CountCurrentInvCut, std::vector <double> DistinctCuts);
-
+void connect_points(double *ArrEff, int * ArrNum, int Num, int NbCuts, std::vector <int>  CountCurrentInvCut, std::vector <double> DistinctCuts,
+    int * FirstCutArrNum, int FirstCutEntries, int offset);
 
 
 
@@ -144,6 +142,7 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
             MeanEffRecoCut.push_back(meanEffReco);
             MeanEffFakeCut.push_back(meanEffFake);
             NumDistinctCuts++; 
+            std::cout<<"Cut :"<<1/CurrentInvCut<<"     Reco efficiency :"<<meanEffReco<<"      Fake tracklets :"<<meanEffFake<<std::endl;
         }else{ //we have already processed this cut
             continue;
         }  
@@ -227,34 +226,58 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
      
         std::sort(DistinctCuts.begin(), DistinctCuts.end()); //we sort it for the plots later
 
-        connect_points(ArrEff, ArrNum, Num1,  NbCuts, CountCurrentInvCut,DistinctCuts);
-        connect_points(ArrEff, ArrNum, Num2,  NbCuts, CountCurrentInvCut,DistinctCuts);
-        connect_points(ArrEff, ArrNum, Num3,  NbCuts, CountCurrentInvCut,DistinctCuts);
-        connect_points(ArrEff, ArrNum, Num4,  NbCuts, CountCurrentInvCut,DistinctCuts);
-        connect_points(ArrEff, ArrNum, Num5,  NbCuts, CountCurrentInvCut,DistinctCuts);
+        connect_points(ArrEff, ArrNum, Num1,  NbCuts, CountCurrentInvCut,DistinctCuts, FirstCutArrNum, FirstCutEntries, offset);
+        connect_points(ArrEff, ArrNum, Num2,  NbCuts, CountCurrentInvCut,DistinctCuts, FirstCutArrNum, FirstCutEntries, offset);
+        connect_points(ArrEff, ArrNum, Num3,  NbCuts, CountCurrentInvCut,DistinctCuts, FirstCutArrNum, FirstCutEntries, offset);
+        connect_points(ArrEff, ArrNum, Num4,  NbCuts, CountCurrentInvCut,DistinctCuts, FirstCutArrNum, FirstCutEntries, offset);
+        connect_points(ArrEff, ArrNum, Num5,  NbCuts, CountCurrentInvCut,DistinctCuts, FirstCutArrNum, FirstCutEntries, offset);
     }
     
 
-    void connect_points(double *ArrEff, int * ArrNum, int Num, int NbCuts, std::vector <int>  CountCurrentInvCut, std::vector <double> DistinctCuts){
-        double * Array = new double [NbCuts];
+    void connect_points(double *ArrEff, int * ArrNum, int Num, int NbCuts, std::vector <int>  CountCurrentInvCut, std::vector <double> DistinctCuts,
+    int * FirstCutArrNum, int FirstCutEntries, int offset){
+        std::vector <double> Vector;
         int jOffset=0;
+        std::vector <double> DistinctCutsPlot;
         
-        for(int i=0; i<NbCuts; i++){
-            for(int j=jOffset; j<jOffset+CountCurrentInvCut[i]; j++){ //we only look at one tan lambda cut value
-                if(ArrNum[j]==Num){ //this is the entry related to this number
-                    Array[i]=ArrEff[j];
-                    break;
-                }  
+        //std::cout<<"vector size :"<<Vector.size()<<std::endl;
+
+        //while(Vector.size()< 0.6*NbCuts){
+
+            for(int i=0; i<NbCuts; i++){
+                for(int j=jOffset; j<jOffset+CountCurrentInvCut[i]; j++){ //we only look at one tan lambda cut value
+                    if(ArrNum[j]==Num){ //this is the entry related to this number
+                        Vector.push_back(ArrEff[j]);
+                        DistinctCutsPlot.push_back(DistinctCuts[i]);
+                        //std::cout<<"To plot :   Cut :"<<DistinctCuts[i]<<"  Eff "<<ArrEff[j]<<std::endl;
+                        break;
+                    } 
+
+                    
+                }
+                jOffset+=CountCurrentInvCut[i];
             }
-            jOffset+=CountCurrentInvCut[i];
-        }
+            /* 
+            if(Vector.size() < 0.6*NbCuts){
+                Vector.clear();
+               int * itr = std::find (FirstCutArrNum , FirstCutArrNum +FirstCutEntries, Num);
+               int place = distance(FirstCutArrNum, itr );
+               std::cout<<place<<std::endl;
 
+               if(place < FirstCutEntries/2){ // it is at the beginning
+                   Num= FirstCutArrNum[place+1];
+               }else{
+                   Num= FirstCutArrNum[place-1];
+               }
+            }*/
+        //}
 
-        TGraph * graph1= new TGraph(NbCuts, DistinctCuts.data(),Array);
-        //graph1->SetMarkerStyle(20);
-        //graph1-> SetMarkerColor(4);
+        //std::cout<<"vector size after :"<<Vector.size()<<std::endl;
+    // it would be nice to deal with the case where the entry we are interested disappears
+
+        TGraph * graph1= new TGraph(Vector.size(), DistinctCutsPlot.data(),Vector.data());
         graph1->Draw("PC");
-        delete [] Array;
+        //delete [] Array;
     }
     
     
