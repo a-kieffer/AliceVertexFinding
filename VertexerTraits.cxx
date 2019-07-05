@@ -17,6 +17,7 @@
 #include "ITStracking/ClusterLines.h"
 #include "ITStracking/Tracklet.h"
 #include <iostream>
+#include <math.h> 
 
 #define LAYER0_TO_LAYER1 0
 #define LAYER1_TO_LAYER2 1
@@ -52,13 +53,16 @@ void trackleterKernelSerial(
     int storedTracklets{ 0 };
     const Cluster currentCluster{ clustersCurrentLayer[iCurrentLayerClusterIndex] };
     const int layerIndex{ layerOrder == LAYER0_TO_LAYER1 ? 0 : 2 };
-    const int4 selectedBinsRect{ VertexerTraits::getBinsRect2(currentCluster, layerIndex, 0.f, 50.f, phiCut) };
+    const int4 selectedBinsRect{ VertexerTraits::getBinsRect2(currentCluster, layerIndex, 0.f, 50.f, phiCut) }; //the problem may be here
     if (selectedBinsRect.x != 0 || selectedBinsRect.y != 0 || selectedBinsRect.z != 0 || selectedBinsRect.w != 0) {
       int phiBinsNum{ selectedBinsRect.w - selectedBinsRect.y + 1 };
       if (phiBinsNum < 0) {
         phiBinsNum += PhiBins;
       }
       // loop on phi bins next layer
+      std::cout<<"x "<<selectedBinsRect.x << " y " << selectedBinsRect.y<< " z " << selectedBinsRect.z<< " w " << selectedBinsRect.w<<std::endl;
+
+
       for (int iPhiBin{ selectedBinsRect.y }, iPhiCount{ 0 }; iPhiCount < phiBinsNum; iPhiBin = ++iPhiBin == PhiBins ? 0 : iPhiBin, iPhiCount++) {
         const int firstBinIndex{ IndexTableUtils::getBinIndex(selectedBinsRect.x, iPhiBin) };
         const int firstRowClusterIndex{ indexTableNext[firstBinIndex] };
@@ -100,6 +104,11 @@ void trackletSelectionKernelSerial(
   const float tanLambdaCut ,
   const int maxTracklets = static_cast<int>(2e3))
 {
+
+  std::cout<<"Number of clusters before selection : "<<clustersNextLayer.size()<<" "<<clustersCurrentLayer.size()<<" "<<debugClustersLayer2.size()<<std::endl;
+  std::cout<<"Number of tracklets before selection : "<<tracklets01.size()<<" "<<tracklets12.size()<<std::endl;
+  
+
   int totalTracklets=0;
   int fakeTracklets=0;
   int realTracklets=0;
@@ -185,10 +194,34 @@ std::vector<int> VertexerTraits::getMClabelsLayer(const int layer) const
 
 void VertexerTraits::arrangeClusters(ROframe* event)
 {
+  double AngleOffset = constants::Math::TwoPi /16.;
+  std::vector <double> x;
+  std::vector <double> y;
+  for(int i=0; i<16; i++){
+    x.push_back(cos(i*AngleOffset));
+    y.push_back(sin(i*AngleOffset));
+  }
+
   mEvent = event;
+  mEvent->clear();
+
   for (int iLayer{ 0 }; iLayer < constants::its::LayersNumberVertexer; ++iLayer) {
-    const auto& currentLayer{ event->getClustersOnLayer(iLayer) };
+
+    //const auto& currentLayer{ event->getClustersOnLayer(iLayer) }; //line to change
+
+
+    
+    std::vector<o2::its::Cluster>  currentLayer;
+    double radius = constants::its::LayersRCoordinate()[iLayer];
+    for (int i=0; i<16; i++){
+      currentLayer.emplace_back(radius*x[i], radius*y[i], 0, i);
+      event->addClusterLabelToLayer(iLayer, i); 
+      event -> addClusterToLayer(iLayer, radius*x[i], radius*y[i], 0, i); 
+    }
+
+
     const size_t clustersNum{ currentLayer.size() };
+
     if (clustersNum > 0) {
       if (clustersNum > mClusters[iLayer].capacity()) {
         mClusters[iLayer].reserve(clustersNum);
@@ -355,6 +388,8 @@ const std::vector<std::pair<int, int>> VertexerTraits::selectClusters(const std:
 void VertexerTraits::computeTrackletsPureMontecarlo()
 {
 
+  // arrangeClusters(NULL);
+
   std::cout << "Running in Montecarlo trivial mode\n";
   std::cout << "clusters on L0: " << mClusters[0].size() << " clusters on L1: " << mClusters[1].size() << " clusters on L2: " << mClusters[2].size() << std::endl;
 
@@ -364,6 +399,10 @@ void VertexerTraits::computeTrackletsPureMontecarlo()
   std::vector<int> labelsMC0 = getMClabelsLayer(0);
   std::vector<int> labelsMC1 = getMClabelsLayer(1);
   std::vector<int> labelsMC2 = getMClabelsLayer(2);
+
+  for(int i=0; i< labelsMC0.size(); i++ ){
+    std::cout<<"Label "<<i<<" : "<<labelsMC0[i] << std::endl ;
+  }
 
   for (unsigned int iCurrentLayerClusterIndex{ 0 }; iCurrentLayerClusterIndex < mClusters[0].size(); ++iCurrentLayerClusterIndex) {
     auto& cluster{ mClusters[0][iCurrentLayerClusterIndex] };
@@ -407,10 +446,11 @@ void VertexerTraits::computeTrackletsPureMontecarlo()
 void VertexerTraits::computeTracklets(const bool useMCLabel)
 {
 
-  std::cout<<"tanLambda Cut :"<<mVrtParams.tanLambdaCut<<"  phi Cut :"<<mVrtParams.phiCut<<std::endl;
+ // std::cout<<"tanLambda Cut :"<<mVrtParams.tanLambdaCut<<"  phi Cut :"<<mVrtParams.phiCut<<std::endl;
   // computeTrackletsPureMontecarlo();
-  if (useMCLabel)
+  if (useMCLabel){
     std::cout << "Running in Montecarlo check mode\n";
+  }
   std::cout << "clusters on L0: " << mClusters[0].size() << " clusters on L1: " << mClusters[1].size() << " clusters on L2: " << mClusters[2].size() << std::endl;
 
   std::vector<int> foundTracklets01;
@@ -429,6 +469,20 @@ void VertexerTraits::computeTracklets(const bool useMCLabel)
   std::vector<int> labelsMC1 = getMClabelsLayer(1);
   std::vector<int> labelsMC2 = getMClabelsLayer(2);
 
+/* 
+  for(int i=0; i< labelsMC0.size(); i++ ){
+    std::cout<<"Label 0  "<<i<<" : "<<labelsMC0[i] << std::endl ;
+  }
+
+  for(int i=0; i< labelsMC1.size(); i++ ){
+    std::cout<<"Label 1  "<<i<<" : "<<labelsMC0[i] << std::endl ;
+  }
+
+  for(int i=0; i< labelsMC2.size(); i++ ){
+    std::cout<<"Label 2  "<<i<<" : "<<labelsMC0[i] << std::endl ;
+  }
+
+*/
   trackleterKernelSerial(
     mClusters[0],
     mClusters[1],
