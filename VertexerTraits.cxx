@@ -48,30 +48,39 @@ void trackleterKernelSerial(
   const int maxTrackletsPerCluster = static_cast<int>(2e3))
 {
   foundTracklets.resize(clustersCurrentLayer.size(), 0);
+  std::cout<<"Size "<<clustersCurrentLayer.size() <<std::endl;
+
   // loop on layer1 clusters
   for (unsigned int iCurrentLayerClusterIndex{ 0 }; iCurrentLayerClusterIndex < clustersCurrentLayer.size(); ++iCurrentLayerClusterIndex) {
     int storedTracklets{ 0 };
     const Cluster currentCluster{ clustersCurrentLayer[iCurrentLayerClusterIndex] };
     const int layerIndex{ layerOrder == LAYER0_TO_LAYER1 ? 0 : 2 };
+    // we get the rectangle which we will project on the next layer to know where to look for clusters
     const int4 selectedBinsRect{ VertexerTraits::getBinsRect2(currentCluster, layerIndex, 0.f, 50.f, phiCut) }; //the problem may be here
-    if (selectedBinsRect.x != 0 || selectedBinsRect.y != 0 || selectedBinsRect.z != 0 || selectedBinsRect.w != 0) {
-      int phiBinsNum{ selectedBinsRect.w - selectedBinsRect.y + 1 };
+    if (selectedBinsRect.x != 0 || selectedBinsRect.y != 0 || selectedBinsRect.z != 0 || selectedBinsRect.w != 0) { //if we have a real rectangle
+      int phiBinsNum{ selectedBinsRect.w - selectedBinsRect.y + 1 }; //number of phi bins 
       if (phiBinsNum < 0) {
-        phiBinsNum += PhiBins;
-      }
-      // loop on phi bins next layer
+        phiBinsNum += PhiBins; //idk but this doesn't seem to create problems
+      }     
       std::cout<<"x "<<selectedBinsRect.x << " y " << selectedBinsRect.y<< " z " << selectedBinsRect.z<< " w " << selectedBinsRect.w<<std::endl;
+    // loop on phi bins next layer
+    // the problem is probably here
 
-
-      for (int iPhiBin{ selectedBinsRect.y }, iPhiCount{ 0 }; iPhiCount < phiBinsNum; iPhiBin = ++iPhiBin == PhiBins ? 0 : iPhiBin, iPhiCount++) {
-        const int firstBinIndex{ IndexTableUtils::getBinIndex(selectedBinsRect.x, iPhiBin) };
-        const int firstRowClusterIndex{ indexTableNext[firstBinIndex] };
-        const int maxRowClusterIndex{ indexTableNext[firstBinIndex + selectedBinsRect.z - selectedBinsRect.x + 1] };
+    
+    
+      for (int iPhiBin{ selectedBinsRect.y }, iPhiCount{ 0 }; iPhiCount < phiBinsNum; iPhiBin = (++iPhiBin == PhiBins ? 0 : iPhiBin), iPhiCount++) { //ok
+        const int firstBinIndex{ IndexTableUtils::getBinIndex(selectedBinsRect.x, iPhiBin) }; //get the starting bin
+        const int firstRowClusterIndex{ indexTableNext[firstBinIndex] }; //get the starting cluster on the next layer 
+        const int maxRowClusterIndex{ indexTableNext[firstBinIndex + selectedBinsRect.z - selectedBinsRect.x + 1] }; //index of the last cluster from the row we have to look at 
+        std::cout<<"First bin index : "<<firstBinIndex<<" Last bin index : "<<firstBinIndex + selectedBinsRect.z - selectedBinsRect.x + 1<< std::endl;
+        std::cout<<"First cluster index : "<<firstRowClusterIndex<<" Last cluster index : "<<maxRowClusterIndex<< std::endl;
         // loop on clusters next layer
-        for (int iNextLayerClusterIndex{ firstRowClusterIndex }; iNextLayerClusterIndex <= maxRowClusterIndex && iNextLayerClusterIndex < (int)clustersNextLayer.size(); ++iNextLayerClusterIndex) {
+        for (int iNextLayerClusterIndex{ firstRowClusterIndex }; iNextLayerClusterIndex <= maxRowClusterIndex && iNextLayerClusterIndex < (int)clustersNextLayer.size(); ++iNextLayerClusterIndex) { //should be ok
           const Cluster& nextCluster{ clustersNextLayer[iNextLayerClusterIndex] };
           const char testMC{ !isMc || (nextLayerMClabels[iNextLayerClusterIndex] == currentLayerMClabels[iCurrentLayerClusterIndex] && nextLayerMClabels[iNextLayerClusterIndex] != -1) };
           if (gpu::GPUCommonMath::Abs(currentCluster.phiCoordinate - nextCluster.phiCoordinate) < phiCut && testMC) {
+            std::cout<<"new Tracklet : Cluster layer 1 :  "<<iCurrentLayerClusterIndex<<"  Cluster next layer :"<< iNextLayerClusterIndex<<
+            "   Phi bin next layer :"<<iPhiBin<< std::endl;
             if (storedTracklets < maxTrackletsPerCluster) {
               if (layerOrder == LAYER0_TO_LAYER1) {
                 Tracklets.emplace_back(iNextLayerClusterIndex, iCurrentLayerClusterIndex, nextCluster, currentCluster);
@@ -105,9 +114,17 @@ void trackletSelectionKernelSerial(
   const int maxTracklets = static_cast<int>(2e3))
 {
 
-  std::cout<<"Number of clusters before selection : "<<clustersNextLayer.size()<<" "<<clustersCurrentLayer.size()<<" "<<debugClustersLayer2.size()<<std::endl;
+
+  std::cout<<"Number of clusters before reconstruction : "<<clustersNextLayer.size()<<" "<<clustersCurrentLayer.size()<<" "<<debugClustersLayer2.size()<<std::endl;
   std::cout<<"Number of tracklets before selection : "<<tracklets01.size()<<" "<<tracklets12.size()<<std::endl;
   
+  for(int i=0; i<foundTracklets01.size(); i++){
+    std::cout<<"Found tracklets 01 for cluster "<<i<<" : "<<foundTracklets01[i]<<std::endl;
+  }
+
+  for(int i=0; i<foundTracklets12.size(); i++){
+    std::cout<<"Found tracklets 12 for cluster "<<i<<" : "<<foundTracklets12[i]<<std::endl;
+  }
 
   int totalTracklets=0;
   int fakeTracklets=0;
@@ -208,49 +225,67 @@ void VertexerTraits::arrangeClusters(ROframe* event)
   for (int iLayer{ 0 }; iLayer < constants::its::LayersNumberVertexer; ++iLayer) {
 
     //const auto& currentLayer{ event->getClustersOnLayer(iLayer) }; //line to change
-
-
     
     std::vector<o2::its::Cluster>  currentLayer;
     double radius = constants::its::LayersRCoordinate()[iLayer];
     for (int i=0; i<16; i++){
       currentLayer.emplace_back(radius*x[i], radius*y[i], 0, i);
       event->addClusterLabelToLayer(iLayer, i); 
-      event -> addClusterToLayer(iLayer, radius*x[i], radius*y[i], 0, i); 
+      event -> addClusterToLayer(iLayer, radius*x[i], radius*y[i], 0, i); //uses 1st constructor for clusters
     }
 
 
-    const size_t clustersNum{ currentLayer.size() };
+    const size_t clustersNum{ currentLayer.size() }; //number of clusters in this layer
 
     if (clustersNum > 0) {
       if (clustersNum > mClusters[iLayer].capacity()) {
         mClusters[iLayer].reserve(clustersNum);
       }
       for (unsigned int iCluster{ 0 }; iCluster < clustersNum; ++iCluster) {
-        mClusters[iLayer].emplace_back(iLayer, currentLayer.at(iCluster));
+        mClusters[iLayer].emplace_back(iLayer, currentLayer.at(iCluster)); //we put all the clusters in the mCluster 
+        //uses the 2nd constructor
         mAverageClustersRadii[iLayer] += mClusters[iLayer].back().rCoordinate;
       }
-      mAverageClustersRadii[iLayer] *= 1.f / clustersNum;
+
+      mAverageClustersRadii[iLayer] *= 1.f / clustersNum; //computation of the average value
 
       std::sort(mClusters[iLayer].begin(), mClusters[iLayer].end(), [](Cluster& cluster1, Cluster& cluster2) {
         return cluster1.indexTableBinIndex < cluster2.indexTableBinIndex;
-      });
+      }); //we sort the clusters in mClusters : the clusters with the smallest tableBinIndex are put first
+
       int previousBinIndex{ 0 };
       mIndexTables[iLayer][0] = 0;
-      for (unsigned int iCluster{ 0 }; iCluster < clustersNum; ++iCluster) {
-        const int currentBinIndex{ mClusters[iLayer][iCluster].indexTableBinIndex };
-        if (currentBinIndex > previousBinIndex) {
-          for (int iBin{ previousBinIndex + 1 }; iBin <= currentBinIndex; ++iBin) {
-            mIndexTables[iLayer][iBin] = iCluster;
+      for (unsigned int iCluster{ 0 }; iCluster < clustersNum; ++iCluster) { //for all clusters
+        const int currentBinIndex{ mClusters[iLayer][iCluster].indexTableBinIndex }; //we get the Bin index of the first cluster
+        // do not forget that they are sorted along their indexTableBinIndex
+        if (currentBinIndex > previousBinIndex) { //if the cluster is in another bin 
+        /*  */
+          for (int iBin{ previousBinIndex + 1 }; iBin <= currentBinIndex; ++iBin) { //for all the bins between the old bin and the new one
+            mIndexTables[iLayer][iBin] = iCluster; //we put the current cluster in the bin
           }
+         
+           //mIndexTables[iLayer][currentBinIndex] = iCluster; //this is a modification, it fixes the number of tracklets
           previousBinIndex = currentBinIndex;
         }
       }
       for (int iBin{ previousBinIndex + 1 }; iBin <= ZBins * PhiBins; iBin++) {
-        mIndexTables[iLayer][iBin] = static_cast<int>(clustersNum);
+        mIndexTables[iLayer][iBin] = static_cast<int>(clustersNum); //putting the last one everywhere
       }
     }
+
+
+    for(int i=0; i<20*20; i++){
+      std::cout<<" "<<mIndexTables[iLayer][i];
+    }
+    std::cout<<" \n";
+
   }
+
+
+
+
+
+
   mDeltaRadii10 = mAverageClustersRadii[1] - mAverageClustersRadii[0];
   mDeltaRadii21 = mAverageClustersRadii[2] - mAverageClustersRadii[1];
   mMaxDirectorCosine3 =
