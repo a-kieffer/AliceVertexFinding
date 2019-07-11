@@ -27,12 +27,14 @@ namespace o2
 namespace its
 {
 
-using constants::IndexTable::PhiBins;
-using constants::IndexTable::ZBins;
+using constants::index_table::PhiBins;
+using constants::index_table::ZBins;
 using constants::its::LayersRCoordinate;
 using constants::its::LayersZCoordinate;
-using constants::Math::TwoPi;
-using IndexTableUtils::getZBinIndex;
+using constants::math::TwoPi;
+using index_table_utils::getZBinIndex;
+
+void VertexerTraits::simpleClusters(ROframe * event);
 
 void trackleterKernelSerial(
   const std::vector<Cluster>& clustersNextLayer,    // 0 2
@@ -69,19 +71,22 @@ void trackleterKernelSerial(
       int lastClusterIndex = -1 ;
     
       for (int iPhiBin{ selectedBinsRect.y }, iPhiCount{ 0 }; iPhiCount < phiBinsNum; iPhiBin = (++iPhiBin == PhiBins ? 0 : iPhiBin), iPhiCount++) { //ok
-        int firstBinIndex{ IndexTableUtils::getBinIndex(selectedBinsRect.x, iPhiBin) }; //get the starting bin
+        int firstBinIndex{ index_table_utils::getBinIndex(selectedBinsRect.x, iPhiBin) }; //get the starting bin
         int firstRowClusterIndex{ indexTableNext[firstBinIndex] }; //get the index of the starting cluster on the next layer 
         const int maxRowClusterIndex{ indexTableNext[firstBinIndex + selectedBinsRect.z - selectedBinsRect.x + 1] }; //index of the last cluster from the row we have to look at 
 
+        // const int firstRowClusterIndex{ (iPhiBin == 0) || (indexTableNext[firstBinIndex] != indexTableNext[firstBinIndex - 20]) ? indexTableNext[firstBinIndex] : indexTableNext[firstBinIndex] + 1};     
+
         if(firstRowClusterIndex==lastClusterIndex){
           firstRowClusterIndex++; // it works
+        }else {
+          std::cout<<"No, I'm not equal!\n";
         }
 
         std::cout<<"First bin index : "<<firstBinIndex<<" Last bin index : "<<firstBinIndex + selectedBinsRect.z - selectedBinsRect.x + 1<< std::endl;
         std::cout<<"First cluster index : "<<firstRowClusterIndex<<" Last cluster index : "<<maxRowClusterIndex<< std::endl;
         
-        
-
+      
 
         // loop on clusters next layer
         for (int iNextLayerClusterIndex{ firstRowClusterIndex }; iNextLayerClusterIndex <= maxRowClusterIndex && iNextLayerClusterIndex < (int)clustersNextLayer.size(); ++iNextLayerClusterIndex) { 
@@ -124,7 +129,7 @@ void trackletSelectionKernelSerial(
   const bool isMc,
   const std::vector<int>& MClabelsLayer0,
   const std::vector<int>& MClabelsLayer1,
-  const float tanLambdaCut ,
+  const float tanLambdaCut =0.025f ,
   const int maxTracklets = static_cast<int>(2e3))
 {
 
@@ -195,9 +200,9 @@ VertexerTraits::VertexerTraits() : mAverageClustersRadii{ std::array<float, 3>{ 
                                    mMaxDirectorCosine3{ 0.f }
 {
   // CUDA does not allow for dynamic initialization -> no constructor for VertexingParams
-  mVrtParams.phiSpan = static_cast<int>(std::ceil(constants::IndexTable::PhiBins * mVrtParams.phiCut /
-                                                  constants::Math::TwoPi));
-  mVrtParams.zSpan = static_cast<int>(std::ceil(mVrtParams.zCut * constants::IndexTable::InverseZBinSize()[0]));
+  mVrtParams.phiSpan = static_cast<int>(std::ceil(constants::index_table::PhiBins * mVrtParams.phiCut /
+                                                  constants::math::TwoPi));
+  mVrtParams.zSpan = static_cast<int>(std::ceil(mVrtParams.zCut * constants::index_table::InverseZBinSize()[0]));
   setIsGPU(false);
 }
 
@@ -225,12 +230,12 @@ std::vector<int> VertexerTraits::getMClabelsLayer(const int layer) const
   return mEvent->getTracksId(layer, mClusters[layer]);
 }
 
-void VertexerTraits::arrangeClusters(ROframe* event)
-{
-  
-  double NumClusters = 200;
 
-  double AngleOffset = constants::Math::TwoPi /NumClusters;
+void VertexerTraits::simpleClusters(ROframe * event){
+  
+  double NumClusters = 16;
+
+  double AngleOffset = constants::math::TwoPi /NumClusters;
   std::vector <double> x;
   std::vector <double> y;
   std::vector <double> z0;
@@ -249,18 +254,65 @@ void VertexerTraits::arrangeClusters(ROframe* event)
     z2.push_back(z1[i]*r2/r1);
   }
 
-  mEvent = event;
   mEvent->clear();
 
   for (int iLayer{ 0 }; iLayer < constants::its::LayersNumberVertexer; ++iLayer) {
-
-    //const auto& currentLayer{ event->getClustersOnLayer(iLayer) }; //line to change
 
     std::vector <double> z;
 
     switch(iLayer){
       case 0 : z=z0; break;
-      case 1 : z= z1; break;
+      case 1 : z=z1; break;
+      case 2 : z=z2; break;
+    }
+    
+    double radius = constants::its::LayersRCoordinate()[iLayer];
+    for (int i=0; i<NumClusters; i++){
+      event->addClusterLabelToLayer(iLayer, i); //last argument : label, goes into mClustersLabel
+      event -> addClusterToLayer(iLayer, radius*x[i], radius*y[i], z[i], i); //uses 1st constructor for clusters
+      
+    }
+  }
+}
+
+
+
+void VertexerTraits::arrangeClusters(ROframe* event)
+{
+  /* */
+  double NumClusters = 16;
+
+  double AngleOffset = constants::math::TwoPi /NumClusters;
+  std::vector <double> x;
+  std::vector <double> y;
+  std::vector <double> z0;
+  std::vector <double> z1;
+  std::vector <double> z2;
+
+  double r0 = constants::its::LayersRCoordinate()[0];
+  double r1 = constants::its::LayersRCoordinate()[1];
+  double r2 = constants::its::LayersRCoordinate()[2];
+
+  for(int i=0; i<NumClusters; i++){
+    x.push_back(cos(i*AngleOffset));
+    y.push_back(sin(i*AngleOffset));
+    z0.push_back(0.01*(double)i);
+    z1.push_back(z0[i]*r1/r0);
+    z2.push_back(z1[i]*r2/r1);
+  }
+
+
+  mEvent= event;
+  for (int iLayer{ 0 }; iLayer < constants::its::LayersNumberVertexer; ++iLayer) {
+
+    //const auto& currentLayer{ event->getClustersOnLayer(iLayer) }; //line to change
+ /* */
+
+    std::vector <double> z;
+
+    switch(iLayer){
+      case 0 : z=z0; break;
+      case 1 : z=z1; break;
       case 2 : z=z2; break;
     }
     
@@ -268,11 +320,11 @@ void VertexerTraits::arrangeClusters(ROframe* event)
     double radius = constants::its::LayersRCoordinate()[iLayer];
     for (int i=0; i<NumClusters; i++){
       currentLayer.emplace_back(radius*x[i], radius*y[i], z[i], i); //last argument : cluster Id
+      //this last line may not be necessary if we use the usual line
       event->addClusterLabelToLayer(iLayer, i); //last argument : label, goes into mClustersLabel
       event -> addClusterToLayer(iLayer, radius*x[i], radius*y[i], z[i], i); //uses 1st constructor for clusters
       
     }
-
 
     const size_t clustersNum{ currentLayer.size() }; //number of clusters in this layer
 
@@ -345,10 +397,10 @@ const std::vector<std::pair<int, int>> VertexerTraits::selectClusters(const std:
   filteredBins.reserve(phiBinsNum);
   for (int iPhiBin{ selectedBinsRect[1] }, iPhiCount{ 0 }; iPhiCount < phiBinsNum;
        iPhiBin = ++iPhiBin == PhiBins ? 0 : iPhiBin, iPhiCount++) {
-    const int firstBinIndex{ IndexTableUtils::getBinIndex(selectedBinsRect[0], iPhiBin) };
+    const int firstBinIndex{ index_table_utils::getBinIndex(selectedBinsRect[0], iPhiBin) };
     filteredBins.emplace_back(
       indexTable[firstBinIndex],
-      IndexTableUtils::countRowSelectedBins(indexTable, iPhiBin, selectedBinsRect[0], selectedBinsRect[2]));
+      index_table_utils::countRowSelectedBins(indexTable, iPhiBin, selectedBinsRect[0], selectedBinsRect[2]));
   }
   return filteredBins;
 }
@@ -597,7 +649,7 @@ void VertexerTraits::computeTracklets(const bool useMCLabel)
     useMCLabel,
     labelsMC0,
     labelsMC1,
-    mVrtParams.tanLambdaCut);
+    //mVrtParams.tanLambdaCut);
 }
 /* 
 const std::vector<Cluster>& clustersNextLayer,    //0
