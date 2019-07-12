@@ -82,12 +82,15 @@ void basic_trackleter(
   const int stopAt = (inspEvt == -1) ? rofs->size() : inspEvt + numEvents;
   o2::its::ROframe frame(-123);
   o2::its::VertexerTraits* traits = nullptr;
+  const o2::its::Line zAxis{ std::array<float, 3>{ 0.f, 0.f, -1.f }, std::array<float, 3>{ 0.f, 0.f, 1.f } };
   traits = o2::its::createVertexerTraits();
- 
- 
   o2::its::Vertexer vertexer(traits);
+
   int EntryNum = (inspEvt ==-1) ? 0 : inspEvt;
 
+  struct o2::its::VertexingParameters  par;
+  //par.phiCut=0.01;
+ // par.tanLambdaCut=0.025;
   
 
   for (int iRof = (inspEvt == -1) ? 0 : inspEvt; iRof < stopAt; ++iRof) {
@@ -100,33 +103,33 @@ void basic_trackleter(
     
     itsClusters.GetEntry(rof.getROFEntry().getEvent());
     mcHeaderTree.GetEntry(rof.getROFEntry().getEvent());
-    int nclUsed = o2::its::IOUtils::loadROFrameData(rof, frame, clusters, labels);
-    vertexer.initialiseVertexer(&frame);
+    //int nclUsed = o2::its::IOUtils::loadROFrameData(rof, frame, clusters, labels);
+    vertexer.initialiseVertexer(&frame, 16);
+    vertexer.setParameters(par); 
 
-    vertexer.findTrivialMCTracklets();
+    //vertexer.findTrivialMCTracklets();
+    vertexer.findTracklets(true);
     int T01size = vertexer.getTracklets01().size();
     int T12size = vertexer.getTracklets12().size();
     int Linesize = vertexer.getLines().size();
 
     std::cout<<"Tracklets 01 : "<<T01size<<"  Tracklets 12: "<<T12size<<"  Lines:" <<Linesize<<std::endl;
 
-/* 
-    vertexer.initialiseVertexer(&frame);
-    vertexer.findTracklets(true); 
-    
-    TGenerated += vertexer.getLines().size();
 
-    vertexer.initialiseVertexer(&frame);
+    vertexer.processLines();
+    vertexer.findVertices();
+    vertexer.dumpTraits();
 
-    vertexer.findTracklets(false);
-    FakeTracklets += vertexer.getLines().size(); //only the false ones 
+    //std::vector<std::array<float, 4>> centroidsData = vertexer.getCentroids();
    
-    std::cout<<"Fake tracklets :"<< FakeTracklets<<std::endl;
+    //std::cout<<"x : "<<centroidsData[0][0]<<" y : "<<centroidsData[0][1]<<" z "<<centroidsData[0][2]<<std::endl;
+    
 
 
 
-    std::cout<<"Tracklets selected :"<<RecoMCvalidated<<"   Total real tracklets :"<<TGenerated<<"  Cut :"<<tanLambdaCut<<std::endl;
-*/
+    break;
+
+
   }
 
 }
