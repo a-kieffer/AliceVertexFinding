@@ -20,12 +20,13 @@
 
 using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
 
-//the aim of this macro is to compute tracklets using a tanLambdaCut value and then writes the number of real trackets found, of fakes tracklets 
-//and of the cut value in a file 
+//the aim of this macro is to compute tracklets using a tanLambdaCut value and then writes the number of real trackets found, of fakes tracklets
+//and of the cut value in a file
 
 
 
-void basic_trackleter(
+void basic_trackleter(       const int numPhiDivs = 16,
+			     const int numZDivs = 0,
                              const int inspEvt = -1,
                              const int numEvents = 1,
                              const std::string inputClustersITS = "o2clus_its.root",
@@ -35,7 +36,7 @@ void basic_trackleter(
                              const std::string path = "./")
 {
 
-  
+
   const auto grp = o2::parameters::GRPObject::loadFrom(path + inputGRP);
   const bool isITS = grp->isDetReadOut(o2::detectors::DetID::ITS);
   const bool isContITS = grp->isDetContinuousReadOut(o2::detectors::DetID::ITS);
@@ -80,35 +81,29 @@ void basic_trackleter(
 
   std::uint32_t roFrame = 0;
   const int stopAt = (inspEvt == -1) ? rofs->size() : inspEvt + numEvents;
+
   o2::its::ROframe frame(-123);
   o2::its::VertexerTraits* traits = nullptr;
-  const o2::its::Line zAxis{ std::array<float, 3>{ 0.f, 0.f, -1.f }, std::array<float, 3>{ 0.f, 0.f, 1.f } };
+
   traits = o2::its::createVertexerTraits();
   o2::its::Vertexer vertexer(traits);
 
   int EntryNum = (inspEvt ==-1) ? 0 : inspEvt;
 
   struct o2::its::VertexingParameters  par;
-  //par.phiCut=0.01;
- // par.tanLambdaCut=0.025;
-  
-
+  // par.phiCut=3.f;
+  // par.tanLambdaCut=0.025;
   for (int iRof = (inspEvt == -1) ? 0 : inspEvt; iRof < stopAt; ++iRof) {
-
-
     auto rof = (*rofs)[iRof];
 
     std::cout << "Entry: " << EntryNum << std::endl;
     EntryNum++;
-    
-    itsClusters.GetEntry(rof.getROFEntry().getEvent());
-    mcHeaderTree.GetEntry(rof.getROFEntry().getEvent());
-    //int nclUsed = o2::its::IOUtils::loadROFrameData(rof, frame, clusters, labels);
-    vertexer.initialiseVertexer(&frame, 16);
-    vertexer.setParameters(par); 
+    o2::its::ioutils::generateSimpleData(frame, numPhiDivs, numZDivs);
+    vertexer.initialiseVertexer(&frame);
+    // vertexer.setParameters(par);
 
-    //vertexer.findTrivialMCTracklets();
-    vertexer.findTracklets(true);
+    // vertexer.findTrivialMCTracklets();
+    vertexer.findTracklets(false);
     int T01size = vertexer.getTracklets01().size();
     int T12size = vertexer.getTracklets12().size();
     int Linesize = vertexer.getLines().size();
@@ -119,27 +114,11 @@ void basic_trackleter(
     vertexer.processLines();
     vertexer.findVertices();
     vertexer.dumpTraits();
-
+    auto vertices = vertexer.exportVertices();
+    if ( vertices.size() > 0 ) std::cout<<"x : "<<vertices[0].getX()<<" y : "<<vertices[0].getY()<<" z "<<vertices[0].getX()<<std::endl;
     //std::vector<std::array<float, 4>> centroidsData = vertexer.getCentroids();
-   
     //std::cout<<"x : "<<centroidsData[0][0]<<" y : "<<centroidsData[0][1]<<" z "<<centroidsData[0][2]<<std::endl;
-    
-
-
-
-    break;
-
-
   }
 
 }
-
-
-
-
-
 #endif
-
-
-
-    
