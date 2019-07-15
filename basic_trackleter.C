@@ -29,6 +29,7 @@ void basic_trackleter(       const int numPhiDivs = 16,
 			     const int numZDivs = 0,
                              const int inspEvt = -1,
                              const int numEvents = 1,
+                             const unsigned char useMC = false,
                              const std::string inputClustersITS = "o2clus_its.root",
                              const std::string inputGRP = "o2sim_grp.root",
                              const std::string simfilename = "o2sim.root",
@@ -103,7 +104,7 @@ void basic_trackleter(       const int numPhiDivs = 16,
     // vertexer.setParameters(par);
 
     // vertexer.findTrivialMCTracklets();
-    vertexer.findTracklets(false);
+    vertexer.findTracklets(useMC);
     int T01size = vertexer.getTracklets01().size();
     int T12size = vertexer.getTracklets12().size();
     int Linesize = vertexer.getLines().size();
