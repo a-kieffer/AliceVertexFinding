@@ -20,25 +20,13 @@
 
 using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
 
-/* 
-struct VertexingParameters {
-  float zCut = 0.002f; //0.002f
-  float phiCut = 0.005f; //0.005f
-  float pairCut = 0.04f;
-  float clusterCut = 0.8f;
-  int clusterContributorsCut = 16;
-  int phiSpan = -1;
-  int zSpan = -1;
-  float tanLambdaCut = 0.025;
-};
-*/
-
 //the aim of this macro is to compute tracklets using a tanLambdaCut value and then writes the number of real trackets found, of fakes tracklets 
 //and of the cut value in a file 
 
 
 
-void trackleter_lambda_cut(  const int inspEvt = -1,
+void trackleter_lambda_cut(   float PhiAngle = 0.005f,
+                             const int inspEvt = -1,
                              const int numEvents = 1,
                              const std::string inputClustersITS = "o2clus_its.root",
                              const std::string inputGRP = "o2sim_grp.root",
@@ -46,8 +34,20 @@ void trackleter_lambda_cut(  const int inspEvt = -1,
                              const std::string paramfilename = "O2geometry.root",
                              const std::string path = "./")
 {
+  std::string Phi = std::to_string(PhiAngle);
+  
+  std::size_t pos = Phi.find(".");
+  if (pos == std::string::npos){
 
-  std::string outfile = "lambda_cut_variation.root";
+  }else{
+    Phi.replace(pos, 1, "_");
+  }
+
+  std::string StdOutfile = "lambda_cut_variation";
+
+  std::string outfile = StdOutfile + "_phi_" + Phi +".root";
+
+  std::cout<<outfile<<std::endl;
   
   const auto grp = o2::parameters::GRPObject::loadFrom(path + inputGRP);
   const bool isITS = grp->isDetReadOut(o2::detectors::DetID::ITS);
@@ -102,13 +102,21 @@ void trackleter_lambda_cut(  const int inspEvt = -1,
   if(results==nullptr){
     std::cout<<"No object to read in the file : it will be created \n";
     // here it is important to use dynamic allocation so the object does not disappear after the block
-    results = new TNtuple("Results", "Results", "RecoMCvalid:FakeTracklets:TotTracklets:Cut");
+    results = new TNtuple("Results", "Results", "RecoMCvalid:FakeTracklets:TotTracklets:Cut:EntryNum");
   }
 
  if(results==nullptr){
     std::cout<<"Still no object \n";
     exit(0);
   }
+
+
+std::vector<double> Cut{ 0.025};
+  // 0.5, 0.1,  0.01, 0.05, 0.025, 0.001,0.005, 0.0001};
+//{0.005, 0.0025, 0.0075};
+//
+
+for (double cut : Cut){
 
 
   std::uint32_t roFrame = 0;
@@ -119,12 +127,12 @@ void trackleter_lambda_cut(  const int inspEvt = -1,
  
  
   o2::its::Vertexer vertexer(traits);
-  int counter =0;
+  int EntryNum = (inspEvt ==-1) ? 0 : inspEvt;
 
 ////////////////////// setting the cut value
   struct o2::its::VertexingParameters  par;
-  par.tanLambdaCut=0.1; // do not use too high values for both
-  par.phiCut=0.05;
+  par.tanLambdaCut=cut; // do not use too high values for both
+  par.phiCut=PhiAngle;
 
   
 
@@ -136,41 +144,47 @@ void trackleter_lambda_cut(  const int inspEvt = -1,
 
     auto rof = (*rofs)[iRof];
 
-    std::cout << "Entry: " << counter << std::endl;
-    ++counter;
+    std::cout << "Entry: " << EntryNum << std::endl;
+    
     itsClusters.GetEntry(rof.getROFEntry().getEvent());
     mcHeaderTree.GetEntry(rof.getROFEntry().getEvent());
-    int nclUsed = o2::its::IOUtils::loadROFrameData(rof, frame, clusters, labels);
+    int nclUsed = o2::its::ioutils::loadROFrameData(rof, frame, clusters, labels);
     vertexer.initialiseVertexer(&frame);
 
     vertexer.setParameters(par); //to set tanLambdaCut
 
-    vertexer.findTracklets(true); //this is where the tracklets are created and then selected
-    // the selected tracklets are stored in mTracklets
+    vertexer.findTracklets(false); //this is where the tracklets are created and then selected
 
-    //this is the mTracklets vector, which contains tracklets and the 2 clusters they contain
-    // it is a vector of lines
-    RecoMCvalidated += vertexer.getLines().size(); //gets all the tracklets
+    std::vector<std::array<float, 8>> dtlVector = vertexer.getDeltaTanLambdas();
+    for(int i =0; i<dtlVector.size(); i++){
+      if(dtlVector[i][7]==true){
+        RecoMCvalidated++;
+      }else{
+        FakeTracklets++;
+      }
+    }
+
+    vertexer.initialiseVertexer(&frame);
    
     vertexer.findTrivialMCTracklets();
     TGenerated += vertexer.getLines().size();
-
-    vertexer.findTracklets(false);
-    FakeTracklets += vertexer.getLines().size(); //only the false ones 
-
    
-    //std::cout<<"Fake tracklets :"<< FakeTracklets<<std::endl;
+    std::cout<<"Fake tracklets :"<< FakeTracklets<<std::endl;
 
     float tanLambdaCut = vertexer.getVertParameters().tanLambdaCut;
 
     if(RecoMCvalidated!=0 && TGenerated!=0 && FakeTracklets!=0){ //do not write entries that are 0
-      results->Fill(RecoMCvalidated,FakeTracklets,TGenerated,tanLambdaCut);
+      results->Fill(RecoMCvalidated,FakeTracklets,TGenerated,tanLambdaCut,EntryNum);
     }
-    std::cout<<"Tracklets selected :"<<RecoMCvalidated<<"   Total real tracklets :"<<TGenerated<<"  Cut :"<<tanLambdaCut<<std::endl;
+    std::cout << "Total tracklets :" << TGenerated << "    real : " << RecoMCvalidated << "     fake :" << FakeTracklets << std::endl;
+    ++EntryNum;
   }
 
-   
+
   results->Write(0,TObject::kOverwrite);
+
+}
+
   outputfile->Close();
 
 

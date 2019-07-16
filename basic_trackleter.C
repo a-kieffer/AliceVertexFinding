@@ -26,7 +26,7 @@ using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
 
 
 void basic_trackleter(       const int numPhiDivs = 16,
-			     const int numZDivs = 0,
+			                       const int numZDivs = 1,
                              const int inspEvt = -1,
                              const int numEvents = 1,
                              const unsigned char useMC = false,
@@ -119,6 +119,7 @@ void basic_trackleter(       const int numPhiDivs = 16,
     if ( vertices.size() > 0 ) std::cout<<"x : "<<vertices[0].getX()<<" y : "<<vertices[0].getY()<<" z "<<vertices[0].getX()<<std::endl;
     //std::vector<std::array<float, 4>> centroidsData = vertexer.getCentroids();
     //std::cout<<"x : "<<centroidsData[0][0]<<" y : "<<centroidsData[0][1]<<" z "<<centroidsData[0][2]<<std::endl;
+    break;
   }
 
 }
