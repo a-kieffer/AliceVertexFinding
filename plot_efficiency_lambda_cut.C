@@ -68,6 +68,8 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     double ArrEffFake[nEntries];
     double ArrInvCut[nEntries];
     int ArrNum[nEntries];
+
+    std::vector <int> alertReco;
     
 	for (int i{0}; i < nEntries; ++i){
         data->GetEntry(i);
@@ -79,6 +81,10 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
 
         double EffReco=RecoMCvalidated/TGenerated;
         double EffFake= FakeTracklets/TGenerated;
+
+        if(EffReco>1){
+                alertReco.push_back(EntryNumber);
+            }
 
         ArrEffReco[i]=EffReco;
         ArrEffFake[i]= EffFake;
@@ -163,7 +169,7 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     graphReco->SetMarkerStyle(7);
     graphReco->GetXaxis()->SetTitle("1/TanLambaCut");
     graphReco->GetYaxis()->SetTitle("RecoMCValidated/Generated");
-    graphReco->SetTitle("Reconstructed Monte Carlo validated tracklets");
+    graphReco->SetTitle("Selected Monte Carlo validated tracklets");
     graphReco->Draw("AP");
 
     TGraph * graphMeanReco= new TGraph(NumDistinctCuts,DistinctCuts.data(),MeanEffRecoCut.data());
@@ -191,6 +197,12 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     graphMeanFake->SetMarkerStyle(20);
     graphMeanFake-> SetMarkerColor(4);
     graphMeanFake->Draw("PC");
+
+     std::cout<<" Number of the entries for Reco : "<<alertReco.size()<<std::endl;
+    for (int entry : alertReco){
+        std::cout<<entry<<std::endl;
+    }
+
 }
 
 
@@ -242,14 +254,12 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
         
         //std::cout<<"vector size :"<<Vector.size()<<std::endl;
 
-        //while(Vector.size()< 0.6*NbCuts){
-
             for(int i=0; i<NbCuts; i++){
                 for(int j=jOffset; j<jOffset+CountCurrentInvCut[i]; j++){ //we only look at one tan lambda cut value
                     if(ArrNum[j]==Num){ //this is the entry related to this number
                         Vector.push_back(ArrEff[j]);
                         DistinctCutsPlot.push_back(DistinctCuts[i]);
-                        //std::cout<<"To plot :   Cut :"<<DistinctCuts[i]<<"  Eff "<<ArrEff[j]<<std::endl;
+                        std::cout<<"To plot :   Cut :"<<DistinctCuts[i]<<"  Eff "<<ArrEff[j]<<"     Entry Num : "<<Num<<std::endl;
                         break;
                     } 
 
@@ -257,27 +267,14 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
                 }
                 jOffset+=CountCurrentInvCut[i];
             }
-            /* 
-            if(Vector.size() < 0.6*NbCuts){
-                Vector.clear();
-               int * itr = std::find (FirstCutArrNum , FirstCutArrNum +FirstCutEntries, Num);
-               int place = distance(FirstCutArrNum, itr );
-               std::cout<<place<<std::endl;
-
-               if(place < FirstCutEntries/2){ // it is at the beginning
-                   Num= FirstCutArrNum[place+1];
-               }else{
-                   Num= FirstCutArrNum[place-1];
-               }
-            }*/
-        //}
+   
 
         //std::cout<<"vector size after :"<<Vector.size()<<std::endl;
-    // it would be nice to deal with the case where the entry we are interested disappears
+
 
         TGraph * graph1= new TGraph(Vector.size(), DistinctCutsPlot.data(),Vector.data());
         graph1->Draw("PC");
-        //delete [] Array;
+
     }
     
     
