@@ -104,7 +104,7 @@ void trackleter_phi_cut(
   }
 
 
-std::vector<double> Cut{ 0.02};
+std::vector<double> Cut{ 0.02, 0.001, 0.005};
   //0.001,0.005}; //until 0.5
 
 for (double cut : Cut){
@@ -138,7 +138,7 @@ for (double cut : Cut){
     
     itsClusters.GetEntry(rof.getROFEntry().getEvent());
     mcHeaderTree.GetEntry(rof.getROFEntry().getEvent());
-    int nclUsed = o2::its::IOUtils::loadROFrameData(rof, frame, clusters, labels);
+    int nclUsed = o2::its::ioutils::loadROFrameData(rof, frame, clusters, labels);
     vertexer.initialiseVertexer(&frame);
 
     vertexer.setParameters(par); //to set Cut

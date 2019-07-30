@@ -111,7 +111,7 @@ void trackleter_lambda_cut(   float PhiAngle = 0.005f,
   }
 
 
-std::vector<double> Cut{ 0.025};
+std::vector<double> Cut{ 0.025, 0.05, 0.01};
   // 0.5, 0.1,  0.01, 0.05, 0.025, 0.001,0.005, 0.0001};
 //{0.005, 0.0025, 0.0075};
 //
@@ -155,9 +155,9 @@ for (double cut : Cut){
 
     vertexer.findTracklets(false); //this is where the tracklets are created and then selected
 
-    std::vector<std::array<float, 8>> dtlVector = vertexer.getDeltaTanLambdas();
+    std::vector<std::array<float, 9>> dtlVector = vertexer.getDeltaTanLambdas();
     for(int i =0; i<dtlVector.size(); i++){
-      if(dtlVector[i][7]==true){
+      if(dtlVector[i][8]==true){
         RecoMCvalidated++;
       }else{
         FakeTracklets++;
