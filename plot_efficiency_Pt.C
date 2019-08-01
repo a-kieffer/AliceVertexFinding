@@ -39,9 +39,17 @@
 
 #include "ITStracking/IOUtils.h"
 #include "ITStracking/Vertexer.h"
+#include "ITStracking/Tracklet.h"
 #include "ITStracking/Constants.h"
 
+#include "TH1F.h"
+#include "TCanvas.h"
+#include "TGraph.h"
+
 using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
+
+void FillPtBins(std::vector<o2::its::Tracklet> tracklets, int layer, std::map<double,int> * PtBins,  std::map<o2::MCCompLabel,o2::its::label>  LabelMap, 
+                o2::its::Vertexer* vertexer, o2::its::ROframe frame);
 
 void plot_efficiency_Pt(const int startRof = 0,
                         const int nRof = -1,
@@ -104,24 +112,30 @@ void plot_efficiency_Pt(const int startRof = 0,
 	TBranch * TracksBranch = labelsData->GetBranch("Tracks");
 	TracksBranch->SetAddress(& Tracks);
 
-  std::vector<double> BinsLimits; 
-  for(int i=0; i<20; i++){
+  std::vector<float> BinsLimits; 
+  for(int i=0; i<80; i++){
       BinsLimits.push_back(0.05*i);
   }
-  //BinsLimits.push_back(0.25);
-  BinsLimits.push_back(1);
-  BinsLimits.push_back(2);
-  BinsLimits.push_back(5);
-  BinsLimits.push_back(10);
-  BinsLimits.push_back(20);
+  for(int i=0; i<12; i++){
+      BinsLimits.push_back(4+0.5*i);
+  }
+  for(int i=0; i<5; i++){
+      BinsLimits.push_back(10+2*i);
+  }
 
   int NbBins = BinsLimits.size()-1;
   std::cout<< "Number of bins : "<< NbBins << std::endl;
 
-  std::map<double,int> PtBins ;
+  std::map<double,int> PtBins01 ;
+  std::map<double,int> RealPtBins01 ;
+  std::map<double,int> PtBins12 ;
+  std::map<double,int> RealPtBins12 ;
 
   for(auto & binlimit : BinsLimits){
-    PtBins.insert(std::pair<double,int>(binlimit,0));
+    PtBins01.insert(std::pair<double,int>(binlimit,0));
+    RealPtBins01.insert(std::pair<double,int>(binlimit,0));
+    PtBins12.insert(std::pair<double,int>(binlimit,0));
+    RealPtBins12.insert(std::pair<double,int>(binlimit,0));
   }
 
   std::uint32_t roFrame = 0;
@@ -137,10 +151,9 @@ void plot_efficiency_Pt(const int startRof = 0,
   mcHeaderTree.GetEntry(0);
 
   for (size_t iROfCount{ static_cast<size_t>(startRof) }; iROfCount < static_cast<size_t>(stopAt); ++iROfCount) {
-
     
     auto& rof = (*rofs)[iROfCount];
-    //std::cout << "  ROframe: " << iROfCount << std::endl;
+    std::cout << "ROframe: " << iROfCount << std::endl;
      
     int nclUsed = o2::its::ioutils::loadROFrameData(rof, frame, clusters, labels);
 
@@ -151,7 +164,6 @@ void plot_efficiency_Pt(const int startRof = 0,
 
     std::map<o2::MCCompLabel,o2::its::label>  LabelMap ;
     
-
     for(unsigned int i=0; i< Tracks->size(); i++){
       o2::MCCompLabel tmpMC = (*MCLabels)[i];
       o2::MCTrack tmpTrack = (*Tracks)[i];
@@ -161,56 +173,141 @@ void plot_efficiency_Pt(const int startRof = 0,
 
     vertexer.initialiseVertexer(eventptr);
     vertexer.findTracklets(true);
-    
-    int count =0;
 
     auto tracklets01 = vertexer.getTracklets01();
-    for(auto & tracklet : tracklets01){
-      auto Cluster0 = vertexer.getClusters()[0][tracklet.firstClusterIndex] ;
-      const auto MCLabel0 = frame.getClusterLabels(0, Cluster0.clusterId);
-      if(LabelMap.find(MCLabel0)!=LabelMap.end()){ //the cluster is in the LabelMap : it was reconstructed, we have to get the Pt
-        //std::cout << "Found a Cluster \n";
-        double Pt = LabelMap[MCLabel0].Pt;
-        std::cout<< "Pt of the Cluster : "<< Pt << std::endl;
-        //std::map<double,int>::iterator it;
-        for ( std::map<double,int>::iterator it = PtBins.begin(); it != PtBins.end(); it++ ){
-          //std::cout << "Bin : " << it->first << std::endl; //does not work
-          if(it->first > Pt){ //the bin beginning is greater than the Pt : it belongs to the previous bin
-            it--;
-            PtBins[(it)->first]++;
-            break;
-          }
-        }
+    auto tracklets12 = vertexer.getTracklets12();
 
-      }
-      //std::cout << "Cluster 0 track ID : " << Label0.getTrackID()<< std::endl;
-    }
+    FillPtBins(tracklets01, 0, &PtBins01,   LabelMap, &vertexer,  frame);
+    FillPtBins(tracklets12, 1, &PtBins12,   LabelMap, &vertexer,  frame);
 
-    //for (auto & label : LabelMap){
-    //  std::cout << "track ID in LabelMap: " << label.TrackId << std::endl;
-    //}
+    vertexer.initialiseVertexer(&frame);
+    vertexer.findTrivialMCTracklets(LabelMap);
+    tracklets01 = vertexer.getTracklets01();
+    tracklets12 = vertexer.getTracklets12();
 
-    //vertexer.findTrivialMCTracklets(LabelMap);
+    FillPtBins(tracklets01, 0, &RealPtBins01,   LabelMap, &vertexer,  frame);
+    FillPtBins(tracklets12, 1, &RealPtBins12,   LabelMap, &vertexer,  frame);
 
-    std::cout<< "Pt bins content : \n";
-    for( auto const& [key, val] : PtBins ){
-    std::cout << key         // string (key)
-              << ':'  
-              << val        // string's value
-              << std::endl ;
-}
-
-    vertexer.findVertices();
-    vertexer.processLines();
-    std::vector<Vertex> vertITS = vertexer.exportVertices();
-
-    if ( vertITS.size() > 0 ) {
-     std::cout<<"Found Vertex : x : "<<vertITS[0].getX()<<" y : "<<vertITS[0].getY()<<" z "<<vertITS[0].getZ()<<std::endl;
-    }
-    
     
   }
 
 
+  std::cout<< "Pt bins 01 content : \n";
+    for( auto const& [key, val] : PtBins01 ){
+      std::cout << key    // string (key)
+              << ':'  << val        // string's value
+              << std::endl ;
+      }
+
+/*
+    std::cout<< "Real Pt bins 12 content : \n";
+    for( auto const& [key, val] : RealPtBins12 ){
+      std::cout << key    // string (key)
+              << ':'  << val        // string's value
+              << std::endl ;
+      }
+
+ */
+
+  //plotting histograms 
+  /* 
+  TCanvas *c1= new TCanvas ("c1", "Histograms", 1600, 900);
+  c1->SetLogy();
+  c1->SetLogy();
+  TH1F *Hist01 = new TH1F("hist01", "Reconstructed Tracklets 01 vs Pt", NbBins, BinsLimits.data());
+  TH1F *HistReal01 = new TH1F("realhist01", "Real Tracklets 01 vs Pt", NbBins, BinsLimits.data());
+
+  for( auto const& [key, val] : PtBins01 ){
+    for(int i =0; i< val;i++){
+      //std::cout << "key :" <<key << " i :" << i << std::endl;
+      Hist01->Fill(key);
+    }
+  }
+
+  for( auto const& [key, val] : RealPtBins01 ){
+    for(int i =0; i< val;i++){
+      //std::cout << "key :" <<key << " i :" << i << std::endl;
+      HistReal01->Fill(key);
+    }
+  }
+
+  std::cout << "Entries in the histogram : "<< Hist01->GetEntries() << std::endl;
+
+  Hist01->Draw();
+  HistReal01->SetLineColor(kOrange + 8);
+  HistReal01->Draw("same");
+
+*/
+
+  //plotting the graphs
+  std::vector<float> Efficiency01;
+
+  for( auto const& [key, val] : PtBins01 ){
+    Efficiency01.push_back(((double)val)/((double)RealPtBins01[key]));
+  }
+  
+  std::vector<float> Efficiency12;
+
+  for( auto const& [key, val] : PtBins12 ){
+    Efficiency12.push_back(((double)val)/((double)RealPtBins12[key]));
+  }
+
+
+  
+
+  BinsLimits.pop_back();
+  Efficiency01.pop_back();
+  Efficiency12.pop_back();
+  TCanvas *c= new TCanvas ("c", "Efficiency graphs", 1600, 900);
+  c->Divide(2,1);
+  c->cd(1);
+  c->cd(1)->SetLogx();
+  TGraph * graphEff01= new TGraph(NbBins, BinsLimits.data(),Efficiency01.data());
+  graphEff01->SetMarkerStyle(8);
+  graphEff01->GetXaxis()->SetTitle("Pt ( GeV) ");
+  graphEff01->GetYaxis()->SetTitle("Reco/Total");
+  graphEff01->SetTitle("Tracklets 01 reconstruction efficiency vs Pt");
+  graphEff01->Draw("APC");
+
+  c->cd(2);
+  c->cd(2)->SetLogx();
+  TGraph * graphEff12= new TGraph(NbBins, BinsLimits.data(),Efficiency12.data());
+  graphEff12->SetMarkerStyle(8);
+  graphEff12->GetXaxis()->SetTitle("Pt ( GeV) ");
+  graphEff12->GetYaxis()->SetTitle("Reco/Total");
+  graphEff12->SetTitle("Tracklets 12 reconstruction efficiency vs Pt");
+  graphEff12->Draw("APC");
+
+  std::cout << "To plot : \n";
+  for(unsigned int i =0; i< Efficiency01.size(); i++) {
+    std::cout<< "Bin : "<< BinsLimits[i] << " efficiency : "<< Efficiency01[i]<< std::endl;
+  }
 }
+
+
+ 
+void FillPtBins(std::vector<o2::its::Tracklet> tracklets, int layer, std::map<double,int> * PtBins,  std::map<o2::MCCompLabel,o2::its::label>  LabelMap, 
+                o2::its::Vertexer * vertexer, o2::its::ROframe frame){
+
+  for(auto & tracklet : tracklets){
+    auto Cluster = vertexer->getClusters()[layer][tracklet.firstClusterIndex] ;
+    const auto MCLabel = frame.getClusterLabels(layer, Cluster.clusterId);
+    if(LabelMap.find(MCLabel)!=LabelMap.end()){ //the cluster is in the LabelMap : it was reconstructed, we have to get the Pt
+      //std::cout << "Found a Cluster \n";
+      double Pt = LabelMap[MCLabel].Pt;
+      //std::cout<< "Pt of the Cluster : "<< Pt << std::endl;
+      for ( std::map<double,int>::iterator it = PtBins->begin(); it != PtBins->end(); it++ ){
+        //std::cout << "Bin : " << it->first << std::endl; //does not work
+        if(it->first > Pt){ //the bin beginning is greater than the Pt : it belongs to the previous bin
+          it--;
+          PtBins->at((it)->first)++;
+          break;
+          }
+        }
+      }
+    }
+}
+
+
+
 #endif
