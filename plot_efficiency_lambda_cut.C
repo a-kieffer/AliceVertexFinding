@@ -173,7 +173,7 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     TGraph * graphMeanReco= new TGraph(NumDistinctCuts,DistinctCuts.data(),MeanEffRecoCut.data());
     graphMeanReco->SetMarkerStyle(20);
     graphMeanReco-> SetMarkerColor(2);
-    graphMeanReco->Draw("PC");
+    graphMeanReco->Draw("PL");
 
     plot_quantiles(nEntries, SortedArrInvCut, SortedArrEffReco,  SortedArrNum, CountCurrentInvCut,DistinctCuts);
 
@@ -194,7 +194,7 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     TGraph * graphMeanFake= new TGraph(NumDistinctCuts,DistinctCuts.data(),MeanEffFakeCut.data());
     graphMeanFake->SetMarkerStyle(20);
     graphMeanFake-> SetMarkerColor(4);
-    graphMeanFake->Draw("PC");
+    graphMeanFake->Draw("PL");
 
      std::cout<<" Number of the entries for Reco : "<<alertReco.size()<<std::endl;
     for (int entry : alertReco){
@@ -275,6 +275,6 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
             }
         //std::cout<<"vector size after :"<<Vector.size()<<std::endl;
         TGraph * graph1= new TGraph(Vector.size(), DistinctCutsPlot.data(),Vector.data());
-        graph1->Draw("PC");
+        graph1->Draw("PL");
     }
 #endif

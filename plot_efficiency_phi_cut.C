@@ -180,7 +180,7 @@ void plot_efficiency_phi_cut(){
     TGraph * graphMeanReco01= new TGraph(NumDistinctCuts,DistinctCuts.data(),MeanEffReco01Cut.data());
     graphMeanReco01->SetMarkerStyle(20);
     graphMeanReco01-> SetMarkerColor(2);
-    graphMeanReco01->Draw("PC");
+    graphMeanReco01->Draw("PL");
 
     plot_quantiles(nEntries, SortedArrInvCut, SortedArrEffReco01,  SortedArrNum, CountCurrentInvCut,DistinctCuts);
 
@@ -196,7 +196,7 @@ void plot_efficiency_phi_cut(){
     TGraph * graphMeanReco12= new TGraph(NumDistinctCuts,DistinctCuts.data(),MeanEffReco12Cut.data());
     graphMeanReco12->SetMarkerStyle(20);
     graphMeanReco12-> SetMarkerColor(2);
-    graphMeanReco12->Draw("PC");
+    graphMeanReco12->Draw("PL");
 
     plot_quantiles(nEntries, SortedArrInvCut, SortedArrEffReco12,  SortedArrNum, CountCurrentInvCut,DistinctCuts);
 
@@ -294,7 +294,8 @@ void plot_efficiency_phi_cut(){
 
 
         TGraph * graph1= new TGraph(Vector.size(), DistinctCutsPlot.data(),Vector.data());
-        graph1->Draw("PC");
+
+        graph1->Draw("PL");
         
     }
     
