@@ -90,8 +90,6 @@ void trackleter_lambda_cut(   float PhiAngle = 0.005f,
   o2::dataformats::MCTruthContainer<o2::MCCompLabel>* labels = nullptr;
   itsClusters.SetBranchAddress("ITSClusterMCTruth", &labels);
 
-
-
   TFile* outputfile = new TFile(outfile.data(), "update");
   
   TNtuple * results = nullptr;
@@ -111,8 +109,18 @@ void trackleter_lambda_cut(   float PhiAngle = 0.005f,
   }
 
 
-std::vector<double> Cut{ 0.025, 0.05, 0.01};
-  // 0.5, 0.1,  0.01, 0.05, 0.025, 0.001,0.005, 0.0001};
+  //getting the Events ID etc
+  std::string file = "label2Track0.root";
+  TFile * labelFile = new TFile(file.data(), "read");
+  TTree * labelsData ;
+  labelFile->GetObject("Labels2Tracks", labelsData);
+  
+  std::vector<o2::MCCompLabel>  * MCLabels = nullptr;
+	TBranch * MCLabelsBranch = labelsData->GetBranch("MCLabels");
+	MCLabelsBranch->SetAddress(& MCLabels);
+
+
+std::vector<double> Cut{ 0.5 , 0.1,  0.01, 0.05, 0.025, 0.001,0.005, 0.0001};
 //{0.005, 0.0025, 0.0075};
 //
 
@@ -134,7 +142,8 @@ for (double cut : Cut){
   par.tanLambdaCut=cut; // do not use too high values for both
   par.phiCut=PhiAngle;
 
-  
+  itsClusters.GetEntry(0);
+  mcHeaderTree.GetEntry(0);
 
   for (int iRof = (inspEvt == -1) ? 0 : inspEvt; iRof < stopAt; ++iRof) {
 
@@ -144,10 +153,18 @@ for (double cut : Cut){
 
     auto rof = (*rofs)[iRof];
 
+    labelsData->GetEntry(iRof);
+
     std::cout << "Entry: " << EntryNum << std::endl;
+    ++EntryNum;
+
+    std::cout << "MCLabels vector size : "<< MCLabels->size() << std::endl;
+
+    if(MCLabels->size()==0){
+      continue;
+    }
+
     
-    itsClusters.GetEntry(rof.getROFEntry().getEvent());
-    mcHeaderTree.GetEntry(rof.getROFEntry().getEvent());
     int nclUsed = o2::its::ioutils::loadROFrameData(rof, frame, clusters, labels);
     vertexer.initialiseVertexer(&frame);
 
@@ -156,8 +173,14 @@ for (double cut : Cut){
     vertexer.findTracklets(false); //this is where the tracklets are created and then selected
 
     std::vector<std::array<float, 9>> dtlVector = vertexer.getDeltaTanLambdas();
-    for(int i =0; i<dtlVector.size(); i++){
-      if(dtlVector[i][8]==true){
+    
+    if(dtlVector.size()>0){
+      std::cout << "Event Id : "<< dtlVector[0][7] << std::endl;
+    }
+
+
+    for(unsigned int i =0; i<dtlVector.size(); i++){
+      if(dtlVector[i][8]==1){
         RecoMCvalidated++;
       }else{
         FakeTracklets++;
@@ -169,18 +192,18 @@ for (double cut : Cut){
     vertexer.findTrivialMCTracklets();
     TGenerated += vertexer.getLines().size();
    
-    std::cout<<"Fake tracklets :"<< FakeTracklets<<std::endl;
+    //std::cout<<"Fake tracklets :"<< FakeTracklets<<std::endl;
 
     float tanLambdaCut = vertexer.getVertParameters().tanLambdaCut;
 
-    if(RecoMCvalidated!=0 && TGenerated!=0 && FakeTracklets!=0){ //do not write entries that are 0
+    if(TGenerated!=0 ){ //do not write entries that are 0
       results->Fill(RecoMCvalidated,FakeTracklets,TGenerated,tanLambdaCut,EntryNum);
     }
     std::cout << "Total tracklets :" << TGenerated << "    real : " << RecoMCvalidated << "     fake :" << FakeTracklets << std::endl;
-    ++EntryNum;
+    
   }
 
-
+  outputfile->cd();
   results->Write(0,TObject::kOverwrite);
 
 }

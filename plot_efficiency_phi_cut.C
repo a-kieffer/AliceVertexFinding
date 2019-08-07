@@ -29,7 +29,7 @@
 using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
 
 //the aim of this macro is to read data from root files containing the reconstructed tracklets and compare them to the real tracklets to compute an efficiency and 
-// plot this efficiency with respect to the delta tan lambda cut parameter
+// plot this efficiency with respect to the phi cut parameter
 
 void plot_efficiency_phi_cut();
 void plot_quantiles(int nEntries, double * ArrInvCut, double *ArrEff,int * ArrNum, std::vector <int> CountCurrentInvCut,std::vector<double> DistinctCuts);
@@ -50,9 +50,7 @@ void plot_efficiency_phi_cut(){
     f->GetObject("Tracklets01", Tracklets01);
     f->GetObject("Tracklets12", Tracklets12);
 
-
     int nEntries=Tracklets01->GetEntries();
-
 
     TLeaf *leafReco01 = Tracklets01->GetLeaf("RecoMCvalid01");
     TLeaf *leafTot01 = Tracklets01->GetLeaf("TotTracklets01");
@@ -169,14 +167,13 @@ void plot_efficiency_phi_cut(){
      
     TCanvas * c1=new TCanvas("c1","Efficiency Reconstruction",1000,700);
 
-
     c1->Divide(2,1);
     c1->cd(1)->SetLogx();
 
     TGraph * graphReco01= new TGraph(nEntries, ArrInvCut,ArrEffReco01);
     graphReco01->SetMarkerStyle(7);
     graphReco01->GetXaxis()->SetTitle("1/PhiCut");
-    graphReco01->GetYaxis()->SetTitle("RecoMCValidated01/Generated");
+    graphReco01->GetYaxis()->SetTitle("Validated tracklets 01/Total");
     graphReco01->SetTitle("Reconstructed Monte Carlo validated tracklets 01");
     graphReco01->Draw("AP");
 
@@ -192,7 +189,7 @@ void plot_efficiency_phi_cut(){
     TGraph * graphReco12= new TGraph(nEntries, ArrInvCut,ArrEffReco12);
     graphReco12->SetMarkerStyle(7);
     graphReco12->GetXaxis()->SetTitle("1/PhiCut");
-    graphReco12->GetYaxis()->SetTitle("RecoMCValidated12/Generated");
+    graphReco12->GetYaxis()->SetTitle("Validated tracklets 12/Total");
     graphReco12->SetTitle("Reconstructed Monte Carlo validated tracklets 12");
     graphReco12->Draw("AP");
 
@@ -204,6 +201,8 @@ void plot_efficiency_phi_cut(){
     plot_quantiles(nEntries, SortedArrInvCut, SortedArrEffReco12,  SortedArrNum, CountCurrentInvCut,DistinctCuts);
 
 
+/*
+
     std::cout<<" Number of the entries for 01 : "<<alert01.size()<<std::endl;
     for (int entry : alert01){
         std::cout<<entry<<std::endl;
@@ -213,7 +212,17 @@ void plot_efficiency_phi_cut(){
     for (int entry : alert12){
         std::cout<<entry<<std::endl;
     }
+ */ 
 
+
+    //saving the plots into a file
+
+    TFile * outputfile = new TFile("efficiency_phi_cut_plots.root", "recreate");
+    outputfile->WriteTObject(graphReco01, "GraphReconstruction01");
+    outputfile->WriteTObject(graphMeanReco01, "GraphMeanReconstruction01");
+    outputfile->WriteTObject(graphReco12, "GraphReconstruction12");
+    outputfile->WriteTObject(graphMeanReco12, "GraphMeanReconstruction12");
+    outputfile->Close();
 
 }
  

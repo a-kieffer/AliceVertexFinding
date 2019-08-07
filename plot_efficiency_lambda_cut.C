@@ -37,8 +37,6 @@ void connect_points(double *ArrEff, int * ArrNum, int Num, int NbCuts, std::vect
     int * FirstCutArrNum, int FirstCutEntries, int offset);
 
 
-
-
 void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
 
     //setting the title of the file
@@ -168,7 +166,7 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     TGraph * graphReco= new TGraph(nEntries, ArrInvCut,ArrEffReco);
     graphReco->SetMarkerStyle(7);
     graphReco->GetXaxis()->SetTitle("1/TanLambaCut");
-    graphReco->GetYaxis()->SetTitle("RecoMCValidated/Generated");
+    graphReco->GetYaxis()->SetTitle("Validated tracklets/Total");
     graphReco->SetTitle("Selected Monte Carlo validated tracklets");
     graphReco->Draw("AP");
 
@@ -187,7 +185,7 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     TGraph * graphFake= new TGraph(nEntries, ArrInvCut,ArrEffFake);
     graphFake->SetMarkerStyle(7);
     graphFake->GetXaxis()->SetTitle("1/TanLambaCut");
-    graphFake->GetYaxis()->SetTitle("Fake Tracklets/Generated");
+    graphFake->GetYaxis()->SetTitle("Fake Tracklets/Total");
     graphFake->SetTitle("Fake tracklets");
     graphFake->Draw("AP");
 
@@ -202,6 +200,16 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     for (int entry : alertReco){
         std::cout<<entry<<std::endl;
     }
+
+
+    //saving the plots into a file
+
+    TFile * outputfile = new TFile("efficiency_lambda_cut_plots.root", "recreate");
+    outputfile->WriteTObject(graphReco, "GraphReconstruction");
+    outputfile->WriteTObject(graphMeanReco, "GraphMeanReconstruction");
+    outputfile->WriteTObject(graphFake, "GraphFakeTracklets");
+    outputfile->WriteTObject(graphMeanFake, "GraphMeanFakeTracklets");
+    outputfile->Close();
 
 }
 
@@ -262,20 +270,11 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
                         std::cout<<"To plot :   Cut :"<<DistinctCuts[i]<<"  Eff "<<ArrEff[j]<<"     Entry Num : "<<Num<<std::endl;
                         break;
                     } 
-
-                    
                 }
                 jOffset+=CountCurrentInvCut[i];
             }
-   
-
         //std::cout<<"vector size after :"<<Vector.size()<<std::endl;
-
-
         TGraph * graph1= new TGraph(Vector.size(), DistinctCutsPlot.data(),Vector.data());
         graph1->Draw("PC");
-
     }
-    
-    
 #endif

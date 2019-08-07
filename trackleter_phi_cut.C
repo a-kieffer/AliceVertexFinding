@@ -104,7 +104,7 @@ void trackleter_phi_cut(
   }
 
 
-std::vector<double> Cut{ 0.02, 0.001, 0.005};
+std::vector<double> Cut{ 0.02, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 0.002, 1};
   //0.001,0.005}; //until 0.5
 
 for (double cut : Cut){
@@ -125,6 +125,9 @@ for (double cut : Cut){
   par.phiCut=cut;
  
 
+  itsClusters.GetEntry(0);
+  mcHeaderTree.GetEntry(0);
+  
   for (int iRof = (inspEvt == -1) ? 0 : inspEvt; iRof < stopAt; ++iRof) {
 
     int TGenerated01=0;
@@ -136,8 +139,7 @@ for (double cut : Cut){
 
     std::cout << "Entry: " << EntryNum << std::endl;
     
-    itsClusters.GetEntry(rof.getROFEntry().getEvent());
-    mcHeaderTree.GetEntry(rof.getROFEntry().getEvent());
+   
     int nclUsed = o2::its::ioutils::loadROFrameData(rof, frame, clusters, labels);
     vertexer.initialiseVertexer(&frame);
 
@@ -148,10 +150,13 @@ for (double cut : Cut){
 
     //this is the mTracklets vector, which contains tracklets and the 2 clusters they contain
     // it is a vector of lines
+
+    
     RecoMCvalidated01 += vertexer.getTracklets01().size(); //gets all the tracklets
     RecoMCvalidated12 += vertexer.getTracklets12().size(); 
 
     vertexer.initialiseVertexer(&frame);
+   
    
     vertexer.findTrivialMCTracklets();
     TGenerated01 += vertexer.getTracklets01().size();
