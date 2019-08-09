@@ -41,6 +41,7 @@ void connect_points(double *ArrEff, int * ArrNum, int Num, int NbCuts, std::vect
 
 void plot_efficiency_phi_cut(){
 
+    //name of the file where the TNtuples will be stored
     std::string file = "phi_cut_variation.root";
  
     //getting the data from the file
@@ -57,15 +58,16 @@ void plot_efficiency_phi_cut(){
     TLeaf *leafReco12 = Tracklets12->GetLeaf("RecoMCvalid12");
     TLeaf *leafTot12 = Tracklets12->GetLeaf("TotTracklets12");
     TLeaf *leafCut = Tracklets01->GetLeaf("Cut");
-    TLeaf *leafNum = Tracklets01->GetLeaf("EntryNum01");
+    TLeaf *leafNum = Tracklets01->GetLeaf("EntryNum01"); 
+    //this last leaf will be used in the plotting macro to connect point corresponding to the same ROFrame
     
+    //arrays that contain the useful information to plot
     double ArrEffReco01[nEntries];
     double ArrEffReco12[nEntries];
     double ArrInvCut[nEntries];
     int ArrNum[nEntries];
     
-    std::vector <int> alert01;
-    std::vector <int> alert12;
+
 
 	for (int i{0}; i < nEntries; ++i){
         Tracklets01->GetEntry(i);
@@ -80,13 +82,6 @@ void plot_efficiency_phi_cut(){
 
         double EffReco01=RecoMCvalidated01/TGenerated01;
         double EffReco12=RecoMCvalidated12/TGenerated12;
-
-        if(EffReco01>1){
-                alert01.push_back(i);
-            }
-        if(EffReco12>1){
-                alert12.push_back(i);
-            }
 
 
         ArrEffReco01[i]=EffReco01;
@@ -103,6 +98,7 @@ void plot_efficiency_phi_cut(){
     for (std::size_t i = 0; i < (unsigned int)nEntries; ++i) { index_vec.push_back(i); }
     std::stable_sort( index_vec.begin(), index_vec.end(), [&](std::size_t a, std::size_t b) { return ArrInvCut[a] < ArrInvCut[b]; });
 
+    //the same arrays as before, but sorted according to the Cut value
     double SortedArrEffReco01 [nEntries];
     double SortedArrEffReco12 [nEntries];
     double SortedArrInvCut [nEntries];
@@ -118,19 +114,20 @@ void plot_efficiency_phi_cut(){
 
     // Computing the mean for each  Cut value to plot it 
 
-    int NumDistinctCuts=0;
-    double CurrentMeanEffReco01=0;
+    int NumDistinctCuts=0; //number of distinct cut values
+    double CurrentMeanEffReco01=0; //mean of the efficiency for the Cut we are currently working on
     double CurrentMeanEffReco12=0;
     double CurrentInvCut;
 
     std::vector <int> CountCurrentInvCut; //contains the number of entries for each cut value
     std::vector<double> DistinctCuts; //contains the distinct cuts, not sorted
-    std::vector<double> MeanEffReco01Cut; //contains the mean EffReco for each cut
+    std::vector<double> MeanEffReco01Cut; //contains the mean Efficiency for each cut
     std::vector<double> MeanEffReco12Cut; 
     double meanEffReco01;
     double meanEffReco12;
 
 
+    //this for loop will iterate over all the different cut values and then over all the entries corresponding to the cut
  
     for(int i=0; i<nEntries; i++){
         if( std::find(DistinctCuts.begin(), DistinctCuts.end(), SortedArrInvCut[i])==DistinctCuts.end() || i==0){ //we have not processed this value yet
@@ -201,20 +198,6 @@ void plot_efficiency_phi_cut(){
     plot_quantiles(nEntries, SortedArrInvCut, SortedArrEffReco12,  SortedArrNum, CountCurrentInvCut,DistinctCuts);
 
 
-/*
-
-    std::cout<<" Number of the entries for 01 : "<<alert01.size()<<std::endl;
-    for (int entry : alert01){
-        std::cout<<entry<<std::endl;
-    }
-
-    std::cout<<" Number of the entries for 12 : "<<alert12.size()<<std::endl;
-    for (int entry : alert12){
-        std::cout<<entry<<std::endl;
-    }
- */ 
-
-
     //saving the plots into a file
 
     TFile * outputfile = new TFile("efficiency_phi_cut_plots.root", "recreate");
@@ -227,21 +210,22 @@ void plot_efficiency_phi_cut(){
 }
  
 
-
+    // this function selects 5 ROFrames and then connects the points corresponding to them
 
     void plot_quantiles(int nEntries, double * ArrInvCut, double *ArrEff, int * ArrNum, std::vector <int> CountCurrentInvCut,
      std::vector<double> DistinctCuts){
 
-        // the goal is to find the Number of all the quantiles for the 1st cut value and to then get all the values for this number
+        //the selected ROFrames correspond to quantiles for the 1st cut value, this could be changed
+        // the goal is to find the ROFrame Number of all the quantiles for the 1st cut value and to then get all the values for this number
         // an easy way is to sort the efficiency array for the 1st cut value
 
         int FirstCutEntries = CountCurrentInvCut[0];
         int offset = FirstCutEntries/5;
 
-        double FirstCutArrEff [FirstCutEntries ];
-        int FirstCutArrNum [FirstCutEntries ];
+        double FirstCutArrEff [FirstCutEntries ]; //array containing the efficiency
+        int FirstCutArrNum [FirstCutEntries ]; //array containing the number of the ROFrame associated with the efficiency
         
-
+        // we sort the entries corresponding to the 1st cut by efficiency value
         std::vector<std::size_t> index_vec;
         for (std::size_t i = 0; i < (unsigned int) FirstCutEntries ; ++i) { index_vec.push_back(i); }
         std::sort( index_vec.begin(), index_vec.end(), [&](std::size_t a, std::size_t b) { return ArrEff[a] < ArrEff[b]; });
@@ -251,7 +235,7 @@ void plot_efficiency_phi_cut(){
          }
 
         int Num1= FirstCutArrNum[0]; //Number of the entry with the lowset Efficiency with the first lambda cut value
-        int Num5= FirstCutArrNum[FirstCutEntries-1-2];
+        int Num5= FirstCutArrNum[FirstCutEntries-3]; //close to the highest efficiency
         int Num2= FirstCutArrNum[offset] ;
         int Num3= FirstCutArrNum[2*offset] ;
         int Num4 = FirstCutArrNum[FirstCutEntries-1-offset];
@@ -270,33 +254,23 @@ void plot_efficiency_phi_cut(){
 
     void connect_points(double *ArrEff, int * ArrNum, int Num, int NbCuts, std::vector <int>  CountCurrentInvCut, std::vector <double> DistinctCuts,
     int * FirstCutArrNum, int FirstCutEntries, int offset){
-        std::vector <double> Vector;
+        std::vector <double> Vector; //vector to store the points that will be connected
         int jOffset=0;
         std::vector <double> DistinctCutsPlot;
-        
-        //std::cout<<"vector size :"<<Vector.size()<<std::endl;
-
-    
 
             for(int i=0; i<NbCuts; i++){
-                for(int j=jOffset; j<jOffset+CountCurrentInvCut[i]; j++){ //we only look at one tan lambda cut value
+                for(int j=jOffset; j<jOffset+CountCurrentInvCut[i]; j++){ //we only look at one cut value
                     if(ArrNum[j]==Num){ //this is the entry related to this number
                         Vector.push_back(ArrEff[j]);
                         DistinctCutsPlot.push_back(DistinctCuts[i]);
                         std::cout<<"To plot :   Cut :"<<DistinctCuts[i]<<"  Eff "<<ArrEff[j]<<"     Entry Num : "<<Num<<std::endl;
                         break;
                     } 
-
-                    
                 }
                 jOffset+=CountCurrentInvCut[i];
             }
-
-
         TGraph * graph1= new TGraph(Vector.size(), DistinctCutsPlot.data(),Vector.data());
-
         graph1->Draw("PL");
-        
     }
     
     

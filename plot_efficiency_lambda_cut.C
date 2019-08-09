@@ -67,7 +67,6 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     double ArrInvCut[nEntries];
     int ArrNum[nEntries];
 
-    std::vector <int> alertReco;
     
 	for (int i{0}; i < nEntries; ++i){
         data->GetEntry(i);
@@ -79,10 +78,6 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
 
         double EffReco=RecoMCvalidated/TGenerated;
         double EffFake= FakeTracklets/TGenerated;
-
-        if(EffReco>1){
-                alertReco.push_back(EntryNumber);
-            }
 
         ArrEffReco[i]=EffReco;
         ArrEffFake[i]= EffFake;
@@ -196,11 +191,6 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
     graphMeanFake-> SetMarkerColor(4);
     graphMeanFake->Draw("PL");
 
-     std::cout<<" Number of the entries for Reco : "<<alertReco.size()<<std::endl;
-    for (int entry : alertReco){
-        std::cout<<entry<<std::endl;
-    }
-
 
     //saving the plots into a file
 
@@ -259,8 +249,6 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
         std::vector <double> Vector;
         int jOffset=0;
         std::vector <double> DistinctCutsPlot;
-        
-        //std::cout<<"vector size :"<<Vector.size()<<std::endl;
 
             for(int i=0; i<NbCuts; i++){
                 for(int j=jOffset; j<jOffset+CountCurrentInvCut[i]; j++){ //we only look at one tan lambda cut value
@@ -273,7 +261,6 @@ void plot_efficiency_lambda_cut(float PhiAngle = 0.005f){
                 }
                 jOffset+=CountCurrentInvCut[i];
             }
-        //std::cout<<"vector size after :"<<Vector.size()<<std::endl;
         TGraph * graph1= new TGraph(Vector.size(), DistinctCutsPlot.data(),Vector.data());
         graph1->Draw("PL");
     }

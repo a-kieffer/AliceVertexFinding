@@ -81,7 +81,7 @@ void trackleter_phi_cut(
   itsClusters.SetBranchAddress("ITSClusterMCTruth", &labels);
 
 
-
+  //outputfile where the data will be stored. When running the macro again, data is added in the same file
   TFile* outputfile = new TFile(outfile.data(), "update");
   
   TNtuple * Tracklets01 = nullptr;
@@ -103,8 +103,8 @@ void trackleter_phi_cut(
     exit(0);
   }
 
-
-std::vector<double> Cut{ 0.02, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 0.002, 1};
+ //here you can choose the cuts. Running the macro twice with the same cuts should't do anything, the points will be surimperposed
+std::vector<double> Cut{ 3/* , 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 0.002, 1*/};
   //0.001,0.005}; //until 0.5
 
 for (double cut : Cut){
@@ -145,18 +145,12 @@ for (double cut : Cut){
 
     vertexer.setParameters(par); //to set Cut
 
-    vertexer.findTracklets(true); //this is where the tracklets are created and then selected
-    // the selected tracklets are stored in mTracklets
-
-    //this is the mTracklets vector, which contains tracklets and the 2 clusters they contain
-    // it is a vector of lines
-
+    vertexer.findTracklets(true); //this is where the tracklets are created and seleced
     
     RecoMCvalidated01 += vertexer.getTracklets01().size(); //gets all the tracklets
     RecoMCvalidated12 += vertexer.getTracklets12().size(); 
 
     vertexer.initialiseVertexer(&frame);
-   
    
     vertexer.findTrivialMCTracklets();
     TGenerated01 += vertexer.getTracklets01().size();
@@ -165,10 +159,10 @@ for (double cut : Cut){
     float phiCut = vertexer.getVertParameters().phiCut;
 
 
-    if(RecoMCvalidated01!=0 && TGenerated01!=0 && RecoMCvalidated12!=0 && TGenerated12!=0){ //do not write entries that are 0
+    if(TGenerated01!=0 && TGenerated12!=0){ //do not write entries that are 0
       Tracklets01->Fill(RecoMCvalidated01,TGenerated01,phiCut,EntryNum);
       Tracklets12->Fill(RecoMCvalidated12,TGenerated12,phiCut,EntryNum);
-      
+      std::cout<<"Fill \n";
     }
     std::cout<<"Tracklets reconstructed 01 :"<<RecoMCvalidated01<<"   Total real tracklets :"<<TGenerated01<<"  Cut :"<<phiCut<<std::endl;
     std::cout<<"Tracklets reconstructed 12 :"<<RecoMCvalidated12<<"   Total real tracklets :"<<TGenerated12<<"  Cut :"<<phiCut<<std::endl;
@@ -176,7 +170,8 @@ for (double cut : Cut){
   }
 
 
-  Tracklets01->Write(0,TObject::kOverwrite);
+  outputfile->cd();
+  Tracklets01->Write(0,TObject::kOverwrite)<<std::endl
   Tracklets12->Write(0,TObject::kOverwrite);
 
 }
@@ -184,7 +179,6 @@ for (double cut : Cut){
   outputfile->Close();
 
 
-  //return 0;
 }
 
 

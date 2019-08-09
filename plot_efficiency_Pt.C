@@ -18,6 +18,9 @@
 #include "TChain.h"
 #include "TFile.h"
 #include "TString.h"
+#include "TH1F.h"
+#include "TCanvas.h"
+#include "TGraph.h"
 #define GSL_THROW_ON_CONTRACT_VIOLATION
 #include <gsl/gsl>
 
@@ -33,27 +36,21 @@
 #include "ITSBase/GeometryTGeo.h"
 #include "ITStracking/ROframe.h"
 
-#include "SimulationDataFormat/MCEventHeader.h"
-#include "SimulationDataFormat/MCTrack.h"
-#include "SimulationDataFormat/MCTruthContainer.h"
 
 #include "ITStracking/IOUtils.h"
 #include "ITStracking/Vertexer.h"
 #include "ITStracking/Tracklet.h"
 #include "ITStracking/Constants.h"
 
-#include "TH1F.h"
-#include "TCanvas.h"
-#include "TGraph.h"
+
 
 using Vertex = o2::dataformats::Vertex<o2::dataformats::TimeStamp<int>>;
 
-void FillPtBins(std::vector<o2::its::Tracklet> tracklets, int layer, std::map<double,int> * PtBins,  std::map<o2::MCCompLabel,o2::its::label>  LabelMap, 
-                o2::its::Vertexer* vertexer, o2::its::ROframe frame);
+void FillPtBins(std::vector<o2::its::Tracklet> tracklets, int layer, std::map<double,int> * PtBins, std::vector<double> * RawPt, 
+                std::map<o2::MCCompLabel,o2::its::ClusterMCLabelInfo>  LabelMap, o2::its::Vertexer* vertexer, o2::its::ROframe frame);
 
 void plot_efficiency_Pt(const int startRof = 0,
                         const int nRof = -1,
-                        const unsigned char muted = true,
                         const std::string path = "./",
                         const std::string inputClustersITS = "o2clus_its.root",
                         const std::string simfilename = "o2sim.root",
@@ -112,7 +109,14 @@ void plot_efficiency_Pt(const int startRof = 0,
 	TBranch * TracksBranch = labelsData->GetBranch("Tracks");
 	TracksBranch->SetAddress(& Tracks);
 
-  std::vector<float> BinsLimits; 
+  //output file to save the plots
+
+  TFile * outputfile = new TFile("efficiency_pt_plots.root", "recreate");
+
+  //creating all the needed vectors 
+
+  std::vector<float> BinsLimits; //vector that contains the limit values for all the pT bins for the histogram
+
   for(int i=0; i<80; i++){
       BinsLimits.push_back(0.05*i);
   }
@@ -126,17 +130,36 @@ void plot_efficiency_Pt(const int startRof = 0,
   int NbBins = BinsLimits.size()-1;
   std::cout<< "Number of bins : "<< NbBins << std::endl;
 
-  std::map<double,int> PtBins01 ;
-  std::map<double,int> RealPtBins01 ;
+
+  // Pt bins to plot the graphs
+  std::map<double,int> PtBins01 ; //number of reconstructed tracklets corresponding to one pT bin
+  // 15 tracklets in bin 0.2 and x in bin 0.25 means that there are 15 tracklets with a bin between 0.2 and 0.25
+  std::map<double,int> RealPtBins01 ; //number of real tracklers
   std::map<double,int> PtBins12 ;
   std::map<double,int> RealPtBins12 ;
+  // all the vectors corresponding to lines are commented out because I did not find a way to get the lines
+  //std::map<double,int> PtBinsLines ;
+  //std::map<double,int> RealPtBinsLines ;
 
+  //set the number of tracklets for each bin to 0
   for(auto & binlimit : BinsLimits){
     PtBins01.insert(std::pair<double,int>(binlimit,0));
     RealPtBins01.insert(std::pair<double,int>(binlimit,0));
     PtBins12.insert(std::pair<double,int>(binlimit,0));
     RealPtBins12.insert(std::pair<double,int>(binlimit,0));
+    //PtBinsLines.insert(std::pair<double,int>(binlimit,0));
+    //RealPtBinsLines.insert(std::pair<double,int>(binlimit,0));
   }
+
+
+  //vectors to fill the histograms : all the values of the Pt, no bins
+  std::vector<double> RawPt01;
+  std::vector<double> RawPt12;
+  //std::vector<double> RawPtLines;
+  std::vector<double> RawRealPt01;
+  std::vector<double> RawRealPt12;
+  //std::vector<double> RawRealPtLines;
+
 
   std::uint32_t roFrame = 0;
   o2::its::ROframe frame(-123);
@@ -144,6 +167,12 @@ void plot_efficiency_Pt(const int startRof = 0,
   traits = o2::its::createVertexerTraits();
  
   o2::its::Vertexer vertexer(traits);
+
+  o2::its::VertexingParameters parameters;
+
+  //here you can set the value of the cut 
+  parameters.phiCut = 0.02f;
+  vertexer.setParameters(parameters);
 
   const int stopAt = (nRof == -1) ? rofs->size() : startRof + nRof;
 
@@ -162,13 +191,13 @@ void plot_efficiency_Pt(const int startRof = 0,
     
     labelsData->GetEntry(iROfCount);
 
-    std::map<o2::MCCompLabel,o2::its::label>  LabelMap ;
+    std::map<o2::MCCompLabel,o2::its::ClusterMCLabelInfo>  LabelMap ;
     
     for(unsigned int i=0; i< Tracks->size(); i++){
       o2::MCCompLabel tmpMC = (*MCLabels)[i];
       o2::MCTrack tmpTrack = (*Tracks)[i];
-      o2::its::label tmpLabel = {tmpMC.getTrackID(),  tmpTrack.getMotherTrackId(), tmpMC.getEventID(), static_cast<float>( tmpTrack.GetPt())};
-      LabelMap.insert( std::pair <o2::MCCompLabel,o2::its::label> (tmpMC, tmpLabel));
+      o2::its::ClusterMCLabelInfo tmpLabel = {tmpMC.getTrackID(),  tmpTrack.getMotherTrackId(), tmpMC.getEventID(), static_cast<float>( tmpTrack.GetPt())};
+      LabelMap.insert( std::pair <o2::MCCompLabel,o2::its::ClusterMCLabelInfo> (tmpMC, tmpLabel));
     }
 
     vertexer.initialiseVertexer(eventptr);
@@ -177,21 +206,26 @@ void plot_efficiency_Pt(const int startRof = 0,
     auto tracklets01 = vertexer.getTracklets01();
     auto tracklets12 = vertexer.getTracklets12();
 
-    FillPtBins(tracklets01, 0, &PtBins01,   LabelMap, &vertexer,  frame);
-    FillPtBins(tracklets12, 1, &PtBins12,   LabelMap, &vertexer,  frame);
+    std::cout<< "Tracklets 01 : "<< tracklets01.size() << " tracklets 12 : "<< tracklets12.size() << std::endl;
+    //auto lines = vertexer.getLines();
 
-    vertexer.initialiseVertexer(&frame);
-    vertexer.findTrivialMCTracklets(LabelMap);
+    FillPtBins(tracklets01, 0, &PtBins01, &RawPt01,  LabelMap, &vertexer,  frame);
+    FillPtBins(tracklets12, 1, &PtBins12, &RawPt12,  LabelMap, &vertexer,  frame);
+
+    vertexer.initialiseVertexer(eventptr);
+    vertexer.findTrivialMCTracklets(/*LabelMap */);
     tracklets01 = vertexer.getTracklets01();
     tracklets12 = vertexer.getTracklets12();
+    //auto lines = vertexer.getLines();
 
-    FillPtBins(tracklets01, 0, &RealPtBins01,   LabelMap, &vertexer,  frame);
-    FillPtBins(tracklets12, 1, &RealPtBins12,   LabelMap, &vertexer,  frame);
+    FillPtBins(tracklets01, 0, &RealPtBins01, &RawRealPt01,  LabelMap, &vertexer,  frame);
+    FillPtBins(tracklets12, 1, &RealPtBins12, &RawRealPt12,  LabelMap, &vertexer,  frame);
+
 
     
   }
 
-
+/*
   std::cout<< "Pt bins 01 content : \n";
     for( auto const& [key, val] : PtBins01 ){
       std::cout << key    // string (key)
@@ -199,7 +233,7 @@ void plot_efficiency_Pt(const int startRof = 0,
               << std::endl ;
       }
 
-/*
+
     std::cout<< "Real Pt bins 12 content : \n";
     for( auto const& [key, val] : RealPtBins12 ){
       std::cout << key    // string (key)
@@ -210,94 +244,155 @@ void plot_efficiency_Pt(const int startRof = 0,
  */
 
   //plotting histograms 
-  /* 
-  TCanvas *c1= new TCanvas ("c1", "Histograms", 1600, 900);
-  c1->SetLogy();
-  c1->SetLogy();
-  TH1F *Hist01 = new TH1F("hist01", "Reconstructed Tracklets 01 vs Pt", NbBins, BinsLimits.data());
-  TH1F *HistReal01 = new TH1F("realhist01", "Real Tracklets 01 vs Pt", NbBins, BinsLimits.data());
 
-  for( auto const& [key, val] : PtBins01 ){
-    for(int i =0; i< val;i++){
-      //std::cout << "key :" <<key << " i :" << i << std::endl;
-      Hist01->Fill(key);
-    }
+  int nbBinsHist = 400;
+   
+  TCanvas *cHist= new TCanvas ("CanvasHist", "Reconstruction histograms", 1600, 900);
+  cHist->Divide(2,1);
+
+  TH1F *Hist01 = new TH1F("hist01", " Real reconstructed Tracklets 01 vs p_{T};p_{T} (GeV);Reconstructed tracklets",nbBinsHist,0,25 );
+  TH1F *HistReal01 = new TH1F("realhist01", "Real reconstructed Tracklets 01 vs p_{T};p_{T} (GeV);Reconstructed tracklets", nbBinsHist,0,25);
+
+  for( auto PtValue : RawPt01 ){
+      Hist01->Fill(PtValue);
   }
-
-  for( auto const& [key, val] : RealPtBins01 ){
-    for(int i =0; i< val;i++){
-      //std::cout << "key :" <<key << " i :" << i << std::endl;
-      HistReal01->Fill(key);
-    }
+  for( auto PtValue : RawRealPt01 ){
+      HistReal01->Fill(PtValue);
   }
 
   std::cout << "Entries in the histogram : "<< Hist01->GetEntries() << std::endl;
 
-  Hist01->Draw();
+  cHist->cd(1);
+  cHist->cd(1)->SetLogx();
   HistReal01->SetLineColor(kOrange + 8);
-  HistReal01->Draw("same");
+  HistReal01->Draw();
+  Hist01->Draw("sames");
 
+  
+
+  TH1F *Hist12 = new TH1F("hist12", "Real reconstructed Tracklets 12 vs p_{T}; p_{T} (GeV);Reconstructed tracklet",nbBinsHist,0,25 );
+  TH1F *HistReal12 = new TH1F("realhist12", "Real reconstructed Tracklets 12 vs p_{T};p_{T} (GeV);Reconstructed tracklet", nbBinsHist,0,25);
+
+  for( auto PtValue : RawPt12 ){
+      Hist12->Fill(PtValue);
+  }
+  for( auto PtValue : RawRealPt12 ){
+      HistReal12->Fill(PtValue);
+  }
+
+  std::cout << "Entries in the histogram : "<< Hist01->GetEntries() << std::endl;
+
+  cHist->cd(2);
+  cHist->cd(2)->SetLogx();
+  HistReal12->SetLineColor(kOrange + 8);
+  HistReal12->Draw();
+  Hist12->Draw("sames");
+
+/* 
+  TCanvas *cHist2= new TCanvas ("CanvasHist", "Selection histogram", 1600, 900);
+  TH1F *HistLines = new TH1F("histlines", " Real selected lines vs Pt",100,0,25 );
+  TH1F *HistRealLines = new TH1F("reallines", "Real lines vs Pt", 100,0,25);
+
+  for( auto PtValue : RawPtLines ){
+      HistLines->Fill(PtValue);
+  }
+  for( auto PtValue : RawRealPtLines ){
+      HistRealLines->Fill(PtValue);
+  }
+
+  std::cout << "Entries in the histogram : "<< HistLines->GetEntries() << std::endl;
+
+  HistRealLines->SetLineColor(kOrange + 8);
+  HistRealLines->Draw();
+  HistLines->Draw("sames");
 */
-
   //plotting the graphs
-  std::vector<float> Efficiency01;
 
+  std::vector<float> Efficiency01;
   for( auto const& [key, val] : PtBins01 ){
     Efficiency01.push_back(((double)val)/((double)RealPtBins01[key]));
   }
   
   std::vector<float> Efficiency12;
-
   for( auto const& [key, val] : PtBins12 ){
     Efficiency12.push_back(((double)val)/((double)RealPtBins12[key]));
   }
-
-
   
-
+  /* 
+  std::vector<float> EfficiencyLines;
+  for( auto const& [key, val] : PtBinsLines ){
+    EfficiencyLines.push_back(((double)val)/((double)RealPtBinsLines[key]));
+  }
+*/
+  //getting rid of the last value because the bin is empty
   BinsLimits.pop_back();
   Efficiency01.pop_back();
   Efficiency12.pop_back();
-  TCanvas *c= new TCanvas ("c", "Efficiency graphs", 1600, 900);
-  c->Divide(2,1);
-  c->cd(1);
-  c->cd(1)->SetLogx();
+  //EfficiencyLines.pop_back();
+  TCanvas *cGraph= new TCanvas ("cGraph", "Efficiency graphs", 1600, 900);
+  cGraph->Divide(2,1);
+  cGraph->cd(1);
+  cGraph->cd(1)->SetLogx();
   TGraph * graphEff01= new TGraph(NbBins, BinsLimits.data(),Efficiency01.data());
   graphEff01->SetMarkerStyle(8);
-  graphEff01->GetXaxis()->SetTitle("Pt ( GeV) ");
-  graphEff01->GetYaxis()->SetTitle("Reco/Total");
-  graphEff01->SetTitle("Tracklets 01 reconstruction efficiency vs Pt");
-  graphEff01->Draw("APC");
+  graphEff01->GetXaxis()->SetTitle("p_{T} ( GeV) ");
+  graphEff01->GetYaxis()->SetTitle("Real reco/Total");
+  graphEff01->SetTitle("Real tracklets 01 reconstruction efficiency vs p_{T}");
+  graphEff01->Draw("APL");
 
-  c->cd(2);
-  c->cd(2)->SetLogx();
+  cGraph->cd(2);
+  cGraph->cd(2)->SetLogx();
   TGraph * graphEff12= new TGraph(NbBins, BinsLimits.data(),Efficiency12.data());
   graphEff12->SetMarkerStyle(8);
-  graphEff12->GetXaxis()->SetTitle("Pt ( GeV) ");
-  graphEff12->GetYaxis()->SetTitle("Reco/Total");
-  graphEff12->SetTitle("Tracklets 12 reconstruction efficiency vs Pt");
-  graphEff12->Draw("APC");
+  graphEff12->GetXaxis()->SetTitle("p_{T} ( GeV) ");
+  graphEff12->GetYaxis()->SetTitle("Real reco/Total");
+  graphEff12->SetTitle("Real tracklets 12 reconstruction efficiency vs p_{T}");
+  graphEff12->Draw("APL");
 
+/* 
+  TCanvas *cGraph2= new TCanvas ("graphs2", "Efficiency graph for lines", 1600, 900);
+  cGraph->cd(1)->SetLogx();
+  TGraph * graphEffLines= new TGraph(NbBins, BinsLimits.data(),EfficiencyLines.data());
+  graphEffLines->SetMarkerStyle(8);
+  graphEffLines->GetXaxis()->SetTitle("Pt ( GeV) ");
+  graphEffLines->GetYaxis()->SetTitle("Real selected/Total");
+  graphEffLines->SetTitle("Real lines selection efficiency vs Pt");
+  graphEffLines->Draw("APC");
+*/
+/* 
   std::cout << "To plot : \n";
   for(unsigned int i =0; i< Efficiency01.size(); i++) {
     std::cout<< "Bin : "<< BinsLimits[i] << " efficiency : "<< Efficiency01[i]<< std::endl;
   }
+  */
+
+  //write the plots into a file
+  
+  outputfile->WriteTObject(Hist01);
+  outputfile->WriteTObject(HistReal01);
+  outputfile->WriteTObject(Hist12);
+  outputfile->WriteTObject(HistReal12);
+  //outputfile->WriteTObject(HistLines);
+  //outputfile->WriteTObject(HistRealLines);
+  outputfile->WriteTObject(graphEff01, "GraphEff01");
+  outputfile->WriteTObject(graphEff12, "GraphEff12");
+  //outputfile->WriteTObject(graphEffLines, "GraphEffLines");
+
+  //outputfile->Close();
 }
 
 
  
-void FillPtBins(std::vector<o2::its::Tracklet> tracklets, int layer, std::map<double,int> * PtBins,  std::map<o2::MCCompLabel,o2::its::label>  LabelMap, 
-                o2::its::Vertexer * vertexer, o2::its::ROframe frame){
+void FillPtBins(std::vector<o2::its::Tracklet> tracklets, int layer, std::map<double,int> * PtBins, std::vector<double> * RawPt,
+                std::map<o2::MCCompLabel,o2::its::ClusterMCLabelInfo>  LabelMap,  o2::its::Vertexer * vertexer, o2::its::ROframe frame){
 
   for(auto & tracklet : tracklets){
     auto Cluster = vertexer->getClusters()[layer][tracklet.firstClusterIndex] ;
     const auto MCLabel = frame.getClusterLabels(layer, Cluster.clusterId);
-    if(LabelMap.find(MCLabel)!=LabelMap.end()){ //the cluster is in the LabelMap : it was reconstructed, we have to get the Pt
-      //std::cout << "Found a Cluster \n";
+    if(LabelMap.find(MCLabel)!=LabelMap.end()){ //the cluster is in the LabelMap : it is real, we have to get the pT
       double Pt = LabelMap[MCLabel].Pt;
-      //std::cout<< "Pt of the Cluster : "<< Pt << std::endl;
+      RawPt->push_back(Pt);
       for ( std::map<double,int>::iterator it = PtBins->begin(); it != PtBins->end(); it++ ){
-        //std::cout << "Bin : " << it->first << std::endl; //does not work
         if(it->first > Pt){ //the bin beginning is greater than the Pt : it belongs to the previous bin
           it--;
           PtBins->at((it)->first)++;
